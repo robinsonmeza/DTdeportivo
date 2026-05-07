@@ -1,161 +1,160 @@
-# 🏆 DeportivoApp — Sistema de Gestión Deportiva
+# DTdeportivo — Sistema de Gestión Deportiva
 
-Plataforma web full-stack para gestión completa de un equipo deportivo.  
-**Stack:** React + Vite · Node.js + Express · MySQL
+Plataforma web full-stack para gestión integral de equipos y jugadores deportivos.  
+**Stack:** React 18 + Vite · Node.js + Express · PostgreSQL (Neon) · Vercel
 
 ---
 
-## 🗂 Estructura del Proyecto
+## Estructura del proyecto
 
 ```
-deportivo/
-├── backend/          → API REST (Puerto 3001)
+DTdeportivo/
+├── backend/                       → API REST (Puerto 3001)
 │   ├── config/
-│   │   ├── db.js         ← Pool de conexión MySQL
-│   │   └── database.sql  ← Script SQL completo
-│   ├── controllers/      ← Lógica CRUD (7 controladores)
-│   ├── routes/           ← Endpoints REST (8 archivos)
-│   ├── .env              ← Variables de entorno
-│   └── server.js         ← Punto de entrada Express
-└── frontend/         → React + Vite (Puerto 3000)
-    └── src/
-        ├── components/   ← Navbar, StatCard, Modal, etc.
-        ├── pages/        ← Dashboard, Jugadores, Lesiones…
-        └── services/     ← Cliente Axios
+│   │   ├── db.js                  ← Conexión PostgreSQL (Neon)
+│   │   ├── database.sql           ← Schema completo PostgreSQL
+│   │   └── seed.js                ← Credenciales de prueba
+│   ├── controllers/               ← Lógica de negocio (12 controladores)
+│   ├── middleware/
+│   │   └── auth.js                ← JWT + control de roles
+│   ├── routes/                    ← Endpoints REST (12 archivos)
+│   ├── uploads/players/           ← Fotos de jugadores
+│   ├── .env.example               ← Plantilla de variables
+│   └── server.js                  ← Entrada Express
+├── frontend/                      → React + Vite (Puerto 3000)
+│   └── src/
+│       ├── context/
+│       │   └── AuthContext.jsx    ← Estado global de autenticación
+│       ├── components/
+│       │   ├── Navbar.jsx         ← Menú filtrado por rol
+│       │   ├── ProtectedRoute.jsx ← Rutas protegidas
+│       │   ├── Modal.jsx
+│       │   ├── StatCard.jsx
+│       │   ├── LoadingSpinner.jsx
+│       │   └── Somatocarta.jsx
+│       ├── pages/                 ← 10 páginas
+│       └── services/
+│           └── api.js             ← Axios + JWT + refresh automático
+├── vercel.json                    ← Configuración despliegue
+└── IMPLEMENTACION.md              ← Próximas funcionalidades pendientes
 ```
 
 ---
 
-## ⚡ Instrucciones de Ejecución
+## Roles y permisos
 
-### Paso 1 — Configurar la base de datos MySQL
+| Módulo | Admin | Entrenador | Personal Salud | Jugador |
+|---|:---:|:---:|:---:|:---:|
+| Dashboard | ✅ | ✅ | ✅ | ✅ |
+| Jugadores (CRUD) | ✅ | ✅ | 👁️ | 👁️ propio |
+| Entrenamientos | ✅ | ✅ | ❌ | 👁️ |
+| Asistencia | ✅ | ✅ | ❌ | 👁️ |
+| Lesiones | ✅ | 👁️ | ✅ | 👁️ propio |
+| Evaluaciones | ✅ | 👁️ | ✅ | 👁️ propio |
+| Partidos | ✅ | ✅ | ❌ | 👁️ |
+| Estadísticas | ✅ | ✅ | 👁️ | 👁️ propio |
+| Antropometría | ✅ | 👁️ | ✅ | 👁️ propio |
+| Usuarios | ✅ | ✅ parcial | ❌ | ❌ |
+
+**Reglas de creación de usuarios:**
+- Administrador puede crear cualquier rol
+- Entrenador solo puede crear `jugador` y `personal_salud`
+- Ambos pueden hacer carga masiva por CSV
+
+---
+
+## Asociación de jugadores
+
+Un jugador puede estar asociado a **una sola** de estas opciones:
+- **Equipo** → pertenece a un club/equipo registrado
+- **Disciplina deportiva** → practica una disciplina individual (puede escribirse manualmente)
+
+---
+
+## Credenciales de prueba
+
+| Rol | Email | Contraseña |
+|---|---|---|
+| Administrador | admin@dtdeportivo.com | Admin123! |
+| Entrenador | entrenador@dtdeportivo.com | Coach123! |
+| Personal Salud | salud@dtdeportivo.com | Salud123! |
+| Jugador | jugador@dtdeportivo.com | Jugador123! |
+
+---
+
+## Ejecución local
+
+**Requisitos:** Node.js 18+, cuenta Neon (PostgreSQL)
 
 ```bash
-# Abrir MySQL y ejecutar el script SQL:
-mysql -u root -p < backend/config/database.sql
-```
-
-> Esto creará la BD `deportivo_db` con todas las tablas y datos de ejemplo.
-
-### Paso 2 — Configurar variables de entorno
-
-Editar `backend/.env` con tus credenciales MySQL:
-
-```env
-DB_HOST=localhost
-DB_PORT=3306
-DB_USER=root
-DB_PASSWORD=1234
-DB_NAME=deportivo_db
-PORT=3001
-```
-
-### Paso 3 — Iniciar el Backend
-
-```bash
+# Backend
 cd backend
-npm run dev
-# → Servidor en http://localhost:3001
-```
+cp .env.example .env      # Completar DATABASE_URL, JWT_SECRET, JWT_REFRESH_SECRET
+npm install
+npm run seed              # Crea tablas y usuarios de prueba
+npm run dev               # Puerto 3001
 
-### Paso 4 — Iniciar el Frontend
-
-Abrir **otra terminal**:
-
-```bash
+# Frontend (otra terminal)
 cd frontend
-npm run dev
-# → App en http://localhost:3000
+npm install
+npm run dev               # Puerto 3000 → http://localhost:3000
 ```
 
-### Paso 5 — Abrir la aplicación
+### Variables de entorno (`backend/.env`)
 
-Ir a: **http://localhost:3000**
-
----
-
-## 🌐 API Endpoints
-
-| Método     | Ruta                            | Descripción                 |
-| ---------- | ------------------------------- | --------------------------- |
-| GET        | `/api/dashboard`                | Resumen general             |
-| GET/POST   | `/api/jugadores`                | Listar / Crear jugadores    |
-| PUT/DELETE | `/api/jugadores/:id`            | Editar / Eliminar           |
-| GET/POST   | `/api/entrenamientos`           | Listar / Crear              |
-| PUT/DELETE | `/api/entrenamientos/:id`       | Editar / Eliminar           |
-| GET/POST   | `/api/lesiones`                 | Listar / Crear lesiones     |
-| PUT/DELETE | `/api/lesiones/:id`             | Editar / Eliminar           |
-| GET/POST   | `/api/evaluaciones`             | Listar / Crear evaluaciones |
-| PUT/DELETE | `/api/evaluaciones/:id`         | Editar / Eliminar           |
-| GET/POST   | `/api/partidos`                 | Listar / Crear partidos     |
-| PUT/DELETE | `/api/partidos/:id`             | Editar / Eliminar           |
-| GET/POST   | `/api/estadisticas`             | Listar / Crear estadísticas |
-| GET        | `/api/estadisticas/jugador/:id` | Stats por jugador           |
-| PUT/DELETE | `/api/estadisticas/:id`         | Editar / Eliminar           |
-| GET        | `/api/health`                   | Estado del servidor         |
-
----
-
-## 🔍 Ejemplo de consumo de API
-
-```bash
-# Listar jugadores
-curl http://localhost:3001/api/jugadores
-
-# Crear jugador
-curl -X POST http://localhost:3001/api/jugadores \
-  -H "Content-Type: application/json" \
-  -d '{"nombre":"Juan López","edad":23,"posicion":"Delantero","peso":71.5,"altura":1.79}'
-
-# Registrar lesión
-curl -X POST http://localhost:3001/api/lesiones \
-  -H "Content-Type: application/json" \
-  -d '{"jugador_id":1,"tipo":"Muscular","descripcion":"Desgarro","fecha_inicio":"2026-03-30"}'
-
-# Dashboard completo
-curl http://localhost:3001/api/dashboard
+```
+DATABASE_URL=postgresql://user:password@host/db?sslmode=require
+JWT_SECRET=secreto_seguro
+JWT_REFRESH_SECRET=secreto_refresh_diferente
+PORT=3001
+NODE_ENV=development
+FRONTEND_URL=http://localhost:3000
 ```
 
 ---
 
-## 📦 Dependencias
+## Despliegue (Vercel + Neon)
 
-### Backend
+El proyecto usa `vercel.json` con `experimentalServices`:
+- **Frontend** → Vite, ruta `/`
+- **Backend** → Express, ruta `/_/backend`
 
-| Paquete | Versión | Uso                   |
-| ------- | ------- | --------------------- |
-| express | ^4.19   | Servidor HTTP         |
-| mysql2  | ^3.9    | Conexión MySQL        |
-| cors    | ^2.8    | Cabeceras CORS        |
-| dotenv  | ^16.4   | Variables de entorno  |
-| nodemon | ^3.1    | Hot reload desarrollo |
-
-### Frontend
-
-| Paquete           | Versión | Uso                   |
-| ----------------- | ------- | --------------------- |
-| react + react-dom | ^18.3   | UI framework          |
-| react-router-dom  | ^6.24   | Navegación SPA        |
-| axios             | ^1.7    | Cliente HTTP          |
-| recharts          | ^2.12   | Gráficas interactivas |
-| lucide-react      | ^0.396  | Iconos SVG            |
-| react-hot-toast   | ^2.4    | Notificaciones        |
-| vite              | ^5.3    | Bundler + Dev server  |
+Variables de entorno requeridas en Vercel:
+```
+VITE_API_URL=/_/backend/api
+DATABASE_URL=...
+JWT_SECRET=...
+JWT_REFRESH_SECRET=...
+NODE_ENV=production
+```
 
 ---
 
-## 🐛 Solución de problemas comunes
+## API — Endpoints principales
 
-**Error: Cannot connect to MySQL**
+| Método | Ruta | Descripción |
+|---|---|---|
+| POST | `/api/auth/login` | Iniciar sesión |
+| POST | `/api/auth/refresh` | Renovar token |
+| GET | `/api/auth/me` | Usuario actual |
+| PUT | `/api/auth/cambiar-password` | Cambiar contraseña |
+| GET/POST | `/api/jugadores` | Listar / crear jugadores |
+| GET/POST | `/api/usuarios` | Listar / crear usuarios |
+| POST | `/api/usuarios/csv` | Carga masiva CSV |
+| GET/POST | `/api/equipos` | Equipos |
+| GET/POST | `/api/disciplinas` | Disciplinas deportivas |
+| GET | `/api/dashboard` | Resumen general |
 
-- Verificar que MySQL está corriendo: `net start mysql` (Windows)
-- Revisar credenciales en `backend/.env`
+---
 
-**Error: Base de datos no existe**
+## Formato CSV — Carga masiva de usuarios
 
-- Ejecutar el script SQL: `mysql -u root -p < backend/config/database.sql`
+El archivo debe tener las columnas: `nombre, email, password, rol`
 
-**Puerto ya en uso**
+```csv
+nombre,email,password,rol
+Juan Pérez,juan@club.com,Pass123!,jugador
+Ana López,ana@club.com,Pass123!,personal_salud
+```
 
-- Backend: cambiar `PORT=3001` en `.env`
-- Frontend: cambiar `port: 3000` en `vite.config.js`
+Roles válidos: `administrador`, `entrenador`, `personal_salud`, `jugador`
