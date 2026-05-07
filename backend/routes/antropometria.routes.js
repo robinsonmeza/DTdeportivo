@@ -1,11 +1,12 @@
-const { Router } = require('express');
-const { getAntropometriaByJugador, createAntropometria, updateAntropometria, deleteAntropometria } = require('../controllers/antropometria.controller');
+const router = require('express').Router();
+const ctrl   = require('../controllers/antropometria.controller');
+const { verificarToken, autorizar } = require('../middleware/auth');
 
-const router = Router();
+router.use(verificarToken);
 
-router.get('/jugador/:id', getAntropometriaByJugador);
-router.post('/', createAntropometria);
-router.put('/:id', updateAntropometria);
-router.delete('/:id', deleteAntropometria);
+router.get('/jugador/:id',  ctrl.getAntropometriaByJugador);
+router.post('/',            autorizar('administrador', 'personal_salud'), ctrl.createAntropometria);
+router.put('/:id',          autorizar('administrador', 'personal_salud'), ctrl.updateAntropometria);
+router.delete('/:id',       autorizar('administrador', 'personal_salud'), ctrl.deleteAntropometria);
 
 module.exports = router;

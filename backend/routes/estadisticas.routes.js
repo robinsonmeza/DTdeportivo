@@ -1,10 +1,13 @@
 const router = require('express').Router();
 const ctrl   = require('../controllers/estadisticas.controller');
+const { verificarToken, autorizar } = require('../middleware/auth');
 
-router.get('/',                          ctrl.getAll);
-router.get('/jugador/:jugador_id',        ctrl.getByJugador);
-router.post('/',                         ctrl.create);
-router.put('/:id',                       ctrl.update);
-router.delete('/:id',                    ctrl.remove);
+router.use(verificarToken);
+
+router.get('/',                    ctrl.getAll);
+router.get('/jugador/:jugador_id', ctrl.getByJugador);
+router.post('/',                   autorizar('administrador', 'entrenador'), ctrl.create);
+router.put('/:id',                 autorizar('administrador', 'entrenador'), ctrl.update);
+router.delete('/:id',              autorizar('administrador', 'entrenador'), ctrl.remove);
 
 module.exports = router;

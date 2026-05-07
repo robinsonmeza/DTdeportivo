@@ -1,8 +1,11 @@
 const router = require('express').Router();
 const ctrl   = require('../controllers/evaluaciones.controller');
+const { verificarToken, autorizar } = require('../middleware/auth');
 
-router.get('/',     ctrl.getAll);
-router.post('/',    ctrl.create);
-router.delete('/:id', ctrl.remove);
+router.use(verificarToken);
+
+router.get('/',       ctrl.getAll);
+router.post('/',      autorizar('administrador', 'personal_salud'), ctrl.create);
+router.delete('/:id', autorizar('administrador', 'personal_salud'), ctrl.remove);
 
 module.exports = router;
