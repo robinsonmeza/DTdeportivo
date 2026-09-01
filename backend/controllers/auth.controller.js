@@ -6,10 +6,13 @@ function hashPassword(password, salt) {
   return crypto.createHmac('sha256', salt).update(password).digest('hex');
 }
 
+const JWT_SECRET = process.env.JWT_SECRET || 'dtdeportivo_jwt_default_secret_key';
+const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'dtdeportivo_refresh_default_secret_key';
+
 function generarTokens(usuario) {
   const payload = { id: usuario.id, email: usuario.email, rol: usuario.rol, nombre: usuario.nombre };
-  const access  = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '8h' });
-  const refresh = jwt.sign({ id: usuario.id }, process.env.JWT_REFRESH_SECRET, { expiresIn: '7d' });
+  const access  = jwt.sign(payload, JWT_SECRET, { expiresIn: '8h' });
+  const refresh = jwt.sign({ id: usuario.id }, JWT_REFRESH_SECRET, { expiresIn: '7d' });
   return { access, refresh };
 }
 
@@ -53,7 +56,7 @@ exports.refresh = async (req, res) => {
   const { refresh_token } = req.body;
   if (!refresh_token) return res.status(400).json({ error: 'refresh_token requerido' });
   try {
-    const decoded = jwt.verify(refresh_token, process.env.JWT_REFRESH_SECRET);
+    const decoded = jwt.verify(refresh_token, JWT_REFRESH_SECRET);
     const { rows } = await db.query('SELECT * FROM usuarios WHERE id = $1 AND activo = true', [decoded.id]);
     if (!rows.length) return res.status(401).json({ error: 'Usuario no encontrado' });
     const { access, refresh } = generarTokens(rows[0]);

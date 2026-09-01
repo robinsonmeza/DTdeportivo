@@ -1,0 +1,6 @@
+{
+  "name": "DT Deportivo - Gestión de Equipo",
+  "description": "Sistema de Gestión Deportiva para administrar equipos, jugadores, entrenamientos, asistencia, lesiones, partidos, evaluaciones físicas y antropometría.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
