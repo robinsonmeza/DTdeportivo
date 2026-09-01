@@ -7,10 +7,12 @@ import {
 import Modal from '../components/Modal'
 import LoadingSpinner from '../components/LoadingSpinner'
 import api from '../services/api'
+import { useDeporte } from '../context/DeporteContext'
 
 const EMPTY = { jugador_id: '', partido_id: '', goles: 0, asistencias: 0, minutos_jugados: 0 }
 
 export default function EstadisticasJugador() {
+  const { selectedSportId, selectedSport } = useDeporte()
   const [stats, setStats]         = useState([])
   const [jugadores, setJugadores] = useState([])
   const [partidos, setPartidos]   = useState([])
@@ -32,6 +34,22 @@ export default function EstadisticasJugador() {
   }
 
   useEffect(() => { load() }, [])
+
+  // Filtrar jugadores y estadísticas por el deporte seleccionado
+  const jugadoresFiltrados = jugadores.filter(j => {
+    if (selectedSportId && selectedSportId !== 'todos') {
+      return String(j.disciplina_id) === String(selectedSportId)
+    }
+    return true
+  })
+
+  const statsFiltradas = stats.filter(s => {
+    if (selectedSportId && selectedSportId !== 'todos') {
+      const j = jugadores.find(jug => jug.id === s.jugador_id)
+      return j ? String(j.disciplina_id) === String(selectedSportId) : true
+    }
+    return true
+  })
 
   const openCreate = () => { setForm(EMPTY); setEditId(null); setModal(true) }
   const openEdit   = (s) => {
@@ -70,8 +88,8 @@ export default function EstadisticasJugador() {
   }
 
   // Agrupar para gráfica
-  const chartData = jugadores.map(j => {
-    const rows = stats.filter(s => s.jugador_id === j.id)
+  const chartData = jugadoresFiltrados.map(j => {
+    const rows = statsFiltradas.filter(s => s.jugador_id === j.id)
     return {
       nombre:    j.nombre.split(' ')[0],
       goles:     rows.reduce((a, s) => a + Number(s.goles), 0),
@@ -84,20 +102,23 @@ export default function EstadisticasJugador() {
     <div>
       <div className="page-header">
         <h2>Estadísticas de Jugadores</h2>
-        <p>Rendimiento individual por partido y acumulado</p>
+        <p>
+          Rendimiento individual por partido y acumulado
+          {selectedSportId && selectedSportId !== 'todos' ? ` — Deporte: ${selectedSport?.nombre}` : ''}
+        </p>
       </div>
 
       {/* Gráfica */}
       {chartData.length > 0 && (
         <div className="card" style={{ marginBottom: 24 }}>
-          <div className="card-title"><BarChart3 size={18} color="var(--accent)" /> Goles y Asistencias por Jugador</div>
+          <div className="card-title"><BarChart3 size={18} color="var(--accent)" /> Goles / Anotaciones y Asistencias por Jugador</div>
           <ResponsiveContainer width="100%" height={240}>
             <BarChart data={chartData} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
               <XAxis dataKey="nombre" tick={{ fontSize: 12, fill: 'var(--text-secondary)' }} />
               <YAxis tick={{ fontSize: 11, fill: 'var(--text-muted)' }} allowDecimals={false} />
               <Tooltip contentStyle={{ background: 'var(--surface)', border: '1px solid var(--border-hover)', borderRadius: 8, color: 'var(--text-primary)' }} />
               <Legend wrapperStyle={{ fontSize: 12, color: 'var(--text-secondary)' }} />
-              <Bar dataKey="goles"       name="Goles"       fill="var(--accent)"  radius={[6,6,0,0]} />
+              <Bar dataKey="goles"       name="Goles / Puntos"       fill="var(--accent)"  radius={[6,6,0,0]} />
               <Bar dataKey="asistencias" name="Asistencias" fill="var(--accent2)" radius={[6,6,0,0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -106,7 +127,7 @@ export default function EstadisticasJugador() {
 
       <div className="page-toolbar">
         <span style={{ color: 'var(--text-muted)', fontSize: 14 }}>
-          {stats.length} registros estadísticos
+          {statsFiltradas.length} registros estadísticos
         </span>
         <button className="btn btn-primary" onClick={openCreate}>
           <Plus size={16} /> Agregar Estadística
@@ -114,7 +135,7 @@ export default function EstadisticasJugador() {
       </div>
 
       <div className="card" style={{ padding: 0 }}>
-        {loading ? <LoadingSpinner /> : stats.length === 0 ? (
+        {loading ? <LoadingSpinner /> : statsFiltradas.length === 0 ? (
           <div className="empty-state">
             <div className="empty-state-icon">📈</div>
             <p>No hay estadísticas registradas</p>
@@ -125,11 +146,11 @@ export default function EstadisticasJugador() {
               <thead>
                 <tr>
                   <th>Jugador</th><th>Partido</th><th>Rival</th>
-                  <th>⚽ Goles</th><th>🎯 Asistencias</th><th>⏱ Minutos</th><th>Acciones</th>
+                  <th>⚽ Goles / Puntos</th><th>🎯 Asistencias</th><th>⏱ Minutos</th><th>Acciones</th>
                 </tr>
               </thead>
               <tbody>
-                {stats.map(s => (
+                {statsFiltradas.map(s => (
                   <tr key={s.id}>
                     <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{s.jugador_nombre}</td>
                     <td style={{ color: 'var(--text-muted)', fontSize: 12 }}> {s.partido_fecha ? new Date(s.partido_fecha).toLocaleDateString('es') : '—'}</td>
@@ -177,7 +198,7 @@ export default function EstadisticasJugador() {
               <label>Jugador *</label>
               <select name="jugador_id" value={form.jugador_id} onChange={handleChange}>
                 <option value="">Seleccionar…</option>
-                {jugadores.map(j => <option key={j.id} value={j.id}>{j.nombre}</option>)}
+                {jugadoresFiltrados.map(j => <option key={j.id} value={j.id}>{j.nombre} {j.disciplina_nombre ? `(${j.disciplina_nombre})` : ''}</option>)}
               </select>
             </div>
             <div className="form-group">
@@ -192,7 +213,7 @@ export default function EstadisticasJugador() {
               </select>
             </div>
             <div className="form-group">
-              <label>Goles</label>
+              <label>Goles / Puntos</label>
               <input name="goles" type="number" min="0" value={form.goles} onChange={handleChange} />
             </div>
             <div className="form-group">

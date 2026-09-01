@@ -3,8 +3,13 @@ import { CheckCircle2, XCircle, ClipboardList, Users } from 'lucide-react'
 import toast from 'react-hot-toast'
 import LoadingSpinner from '../components/LoadingSpinner'
 import api from '../services/api'
+import { useAuth } from '../context/AuthContext'
+import { useDeporte } from '../context/DeporteContext'
 
 export default function Asistencia() {
+  const { tienePermiso } = useAuth()
+  const puedeEditar = tienePermiso(['administrador', 'entrenador'])
+  const { selectedSportId, selectedSport } = useDeporte()
   const [entrenamientos, setEntrenamientos] = useState([])
   const [jugadores, setJugadores]           = useState([])
   const [asistencia, setAsistencia]         = useState([])
@@ -33,6 +38,14 @@ export default function Asistencia() {
     }
     fetchBase()
   }, [])
+
+  // Filtrar jugadores por disciplina seleccionada
+  const jugadoresFiltrados = jugadores.filter(j => {
+    if (selectedSportId && selectedSportId !== 'todos') {
+      return String(j.disciplina_id) === String(selectedSportId)
+    }
+    return true
+  })
 
   // Cargar asistencia del entrenamiento seleccionado
   const loadAsistencia = useCallback(async (id) => {
@@ -85,7 +98,7 @@ export default function Asistencia() {
     setSaving('all')
     try {
       await Promise.all(
-        jugadores.map(async (j) => {
+        jugadoresFiltrados.map(async (j) => {
           const reg = getRegistro(j.id)
           if (reg) {
             await api.put(`/asistencia/${reg.id}`, { asistencia: valor })
@@ -108,15 +121,18 @@ export default function Asistencia() {
   }
 
   const entrenSelected = entrenamientos.find(e => String(e.id) === selectedId)
-  const presentes  = jugadores.filter(j => getRegistro(j.id)?.asistencia === 1).length
-  const ausentes   = jugadores.length - presentes
-  const pct        = jugadores.length ? Math.round((presentes / jugadores.length) * 100) : 0
+  const presentes  = jugadoresFiltrados.filter(j => getRegistro(j.id)?.asistencia === 1).length
+  const ausentes   = jugadoresFiltrados.length - presentes
+  const pct        = jugadoresFiltrados.length ? Math.round((presentes / jugadoresFiltrados.length) * 100) : 0
 
   return (
     <div>
       <div className="page-header">
         <h2>Asistencia</h2>
-        <p>Control de presencia en sesiones de entrenamiento</p>
+        <p>
+          Control de presencia en sesiones de entrenamiento
+          {selectedSportId && selectedSportId !== 'todos' ? ` — Deporte: ${selectedSport?.nombre}` : ''}
+        </p>
       </div>
 
       {loading ? <LoadingSpinner /> : (
@@ -153,7 +169,7 @@ export default function Asistencia() {
                 </select>
               </div>
 
-              {selectedId && (
+              {selectedId && puedeEditar && (
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button
                     className="btn btn-success btn-sm"
@@ -242,7 +258,7 @@ export default function Asistencia() {
                     </tr>
                   </thead>
                   <tbody>
-                    {jugadores.map((j, i) => {
+                    {jugadoresFiltrados.map((j, i) => {
                       const reg     = getRegistro(j.id)
                       const presente = reg?.asistencia === 1
                       const isSaving = saving === j.id || saving === 'all'

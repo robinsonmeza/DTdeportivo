@@ -4,10 +4,12 @@ import toast from 'react-hot-toast'
 import Modal from '../components/Modal'
 import LoadingSpinner from '../components/LoadingSpinner'
 import api from '../services/api'
+import { useDeporte } from '../context/DeporteContext'
 
 const EMPTY = { jugador_id: '', tipo: '', descripcion: '', fecha_inicio: '', fecha_fin: '' }
 
 export default function Lesiones() {
+  const { selectedSportId, selectedSport } = useDeporte()
   const [lesiones, setLesiones]   = useState([])
   const [jugadores, setJugadores] = useState([])
   const [loading, setLoading]     = useState(true)
@@ -27,6 +29,22 @@ export default function Lesiones() {
   }
 
   useEffect(() => { load() }, [])
+
+  // Filtrar jugadores y lesiones por el deporte activo
+  const jugadoresFiltrados = jugadores.filter(j => {
+    if (selectedSportId && selectedSportId !== 'todos') {
+      return String(j.disciplina_id) === String(selectedSportId)
+    }
+    return true
+  })
+
+  const lesionesFiltradas = lesiones.filter(l => {
+    if (selectedSportId && selectedSportId !== 'todos') {
+      const j = jugadores.find(jug => jug.id === l.jugador_id)
+      return j ? String(j.disciplina_id) === String(selectedSportId) : true
+    }
+    return true
+  })
 
   const openCreate = () => { setForm(EMPTY); setEditId(null); setModal(true) }
   const openEdit   = (l) => {
@@ -64,20 +82,23 @@ export default function Lesiones() {
     catch (e) { toast.error(e.message) }
   }
 
-  const activas = lesiones.filter(l => !l.fecha_fin)
+  const activas = lesionesFiltradas.filter(l => !l.fecha_fin)
 
   return (
     <div>
       <div className="page-header">
         <h2>Lesiones</h2>
-        <p>Control y seguimiento de lesiones del plantel</p>
+        <p>
+          Control y seguimiento de lesiones del plantel
+          {selectedSportId && selectedSportId !== 'todos' ? ` — Deporte: ${selectedSport?.nombre}` : ''}
+        </p>
       </div>
 
       <div className="page-toolbar">
         <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
           <span style={{ color: 'var(--text-muted)', fontSize: 14 }}>
             <HeartPulse size={15} style={{ display: 'inline', marginRight: 6 }} />
-            {lesiones.length} registros · <span style={{ color: 'var(--danger)' }}>{activas.length} activas</span>
+            {lesionesFiltradas.length} registros · <span style={{ color: 'var(--danger)' }}>{activas.length} activas</span>
           </span>
         </div>
         <button className="btn btn-primary" onClick={openCreate}>
@@ -86,7 +107,7 @@ export default function Lesiones() {
       </div>
 
       <div className="card" style={{ padding: 0 }}>
-        {loading ? <LoadingSpinner /> : lesiones.length === 0 ? (
+        {loading ? <LoadingSpinner /> : lesionesFiltradas.length === 0 ? (
           <div className="empty-state">
             <div className="empty-state-icon">🩺</div>
             <p>No hay lesiones registradas</p>
@@ -98,7 +119,7 @@ export default function Lesiones() {
                 <tr><th>Jugador</th><th>Tipo</th><th>Inicio</th><th>Fin</th><th>Estado</th><th>Acciones</th></tr>
               </thead>
               <tbody>
-                {lesiones.map(l => (
+                {lesionesFiltradas.map(l => (
                   <tr key={l.id}>
                     <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{l.jugador_nombre}</td>
                     <td>{l.tipo || '—'}</td>
@@ -145,7 +166,7 @@ export default function Lesiones() {
               <label>Jugador *</label>
               <select name="jugador_id" value={form.jugador_id} onChange={handleChange}>
                 <option value="">Seleccionar jugador…</option>
-                {jugadores.map(j => <option key={j.id} value={j.id}>{j.nombre}</option>)}
+                {jugadoresFiltrados.map(j => <option key={j.id} value={j.id}>{j.nombre} {j.disciplina_nombre ? `(${j.disciplina_nombre})` : ''}</option>)}
               </select>
             </div>
             <div className="form-group">

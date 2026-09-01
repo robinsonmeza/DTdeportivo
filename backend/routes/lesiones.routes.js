@@ -6,8 +6,8 @@ router.use(verificarToken);
 
 router.get('/',       ctrl.getAll);
 router.get('/:id',    ctrl.getOne);
-router.post('/',      autorizar('administrador', 'personal_salud'), ctrl.create);
-router.put('/:id',    autorizar('administrador', 'personal_salud'), ctrl.update);
-router.delete('/:id', autorizar('administrador', 'personal_salud'), ctrl.remove);
+router.post('/',      autorizar('administrador', 'entrenador', 'personal_salud'), ctrl.create);
+router.put('/:id',    autorizar('administrador', 'entrenador', 'personal_salud'), ctrl.update);
+router.delete('/:id', autorizar('administrador', 'entrenador', 'personal_salud'), ctrl.remove);
 
 module.exports = router;

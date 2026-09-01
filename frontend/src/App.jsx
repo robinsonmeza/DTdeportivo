@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './context/AuthContext'
+import { DeporteProvider } from './context/DeporteContext'
 import ProtectedRoute from './components/ProtectedRoute'
 import Navbar from './components/Navbar'
 import Login from './pages/Login'
@@ -26,71 +27,73 @@ function AppLayout({ children }) {
 export default function App() {
   return (
     <AuthProvider>
-      <Routes>
-        <Route path="/login" element={<Login />} />
+      <DeporteProvider>
+        <Routes>
+          <Route path="/login" element={<Login />} />
 
-        <Route path="/" element={
-          <ProtectedRoute>
-            <AppLayout><Dashboard /></AppLayout>
-          </ProtectedRoute>
-        } />
+          <Route path="/" element={
+            <ProtectedRoute>
+              <AppLayout><Dashboard /></AppLayout>
+            </ProtectedRoute>
+          } />
 
-        <Route path="/jugadores" element={
-          <ProtectedRoute>
-            <AppLayout><Jugadores /></AppLayout>
-          </ProtectedRoute>
-        } />
+          <Route path="/jugadores" element={
+            <ProtectedRoute>
+              <AppLayout><Jugadores /></AppLayout>
+            </ProtectedRoute>
+          } />
 
-        <Route path="/entrenamientos" element={
-          <ProtectedRoute roles={['administrador','entrenador','jugador']}>
-            <AppLayout><Entrenamientos /></AppLayout>
-          </ProtectedRoute>
-        } />
+          <Route path="/entrenamientos" element={
+            <ProtectedRoute>
+              <AppLayout><Entrenamientos /></AppLayout>
+            </ProtectedRoute>
+          } />
 
-        <Route path="/asistencia" element={
-          <ProtectedRoute roles={['administrador','entrenador']}>
-            <AppLayout><Asistencia /></AppLayout>
-          </ProtectedRoute>
-        } />
+          <Route path="/asistencia" element={
+            <ProtectedRoute>
+              <AppLayout><Asistencia /></AppLayout>
+            </ProtectedRoute>
+          } />
 
-        <Route path="/lesiones" element={
-          <ProtectedRoute roles={['administrador','personal_salud','jugador']}>
-            <AppLayout><Lesiones /></AppLayout>
-          </ProtectedRoute>
-        } />
+          <Route path="/lesiones" element={
+            <ProtectedRoute>
+              <AppLayout><Lesiones /></AppLayout>
+            </ProtectedRoute>
+          } />
 
-        <Route path="/evaluaciones" element={
-          <ProtectedRoute roles={['administrador','personal_salud','jugador']}>
-            <AppLayout><Evaluaciones /></AppLayout>
-          </ProtectedRoute>
-        } />
+          <Route path="/evaluaciones" element={
+            <ProtectedRoute>
+              <AppLayout><Evaluaciones /></AppLayout>
+            </ProtectedRoute>
+          } />
 
-        <Route path="/partidos" element={
-          <ProtectedRoute roles={['administrador','entrenador','jugador']}>
-            <AppLayout><Partidos /></AppLayout>
-          </ProtectedRoute>
-        } />
+          <Route path="/partidos" element={
+            <ProtectedRoute>
+              <AppLayout><Partidos /></AppLayout>
+            </ProtectedRoute>
+          } />
 
-        <Route path="/estadisticas" element={
-          <ProtectedRoute>
-            <AppLayout><EstadisticasJugador /></AppLayout>
-          </ProtectedRoute>
-        } />
+          <Route path="/estadisticas" element={
+            <ProtectedRoute>
+              <AppLayout><EstadisticasJugador /></AppLayout>
+            </ProtectedRoute>
+          } />
 
-        <Route path="/antropometria" element={
-          <ProtectedRoute roles={['administrador','personal_salud','jugador']}>
-            <AppLayout><Antropometria /></AppLayout>
-          </ProtectedRoute>
-        } />
+          <Route path="/antropometria" element={
+            <ProtectedRoute>
+              <AppLayout><Antropometria /></AppLayout>
+            </ProtectedRoute>
+          } />
 
-        <Route path="/usuarios" element={
-          <ProtectedRoute roles={['administrador','entrenador']}>
-            <AppLayout><Usuarios /></AppLayout>
-          </ProtectedRoute>
-        } />
+          <Route path="/usuarios" element={
+            <ProtectedRoute roles={['administrador']}>
+              <AppLayout><Usuarios /></AppLayout>
+            </ProtectedRoute>
+          } />
 
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </DeporteProvider>
     </AuthProvider>
   )
 }

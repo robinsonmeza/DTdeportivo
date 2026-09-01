@@ -7,6 +7,7 @@ import {
 import Modal from '../components/Modal'
 import LoadingSpinner from '../components/LoadingSpinner'
 import api from '../services/api'
+import { useDeporte } from '../context/DeporteContext'
 
 const EMPTY = {
   jugador_id: '',
@@ -22,6 +23,7 @@ const EMPTY = {
 }
 
 export default function Evaluaciones() {
+  const { selectedSportId, selectedSport } = useDeporte()
   const [evals, setEvals] = useState([])
   const [jugadores, setJugadores] = useState([])
   const [loading, setLoading] = useState(true)
@@ -40,6 +42,22 @@ export default function Evaluaciones() {
   }
 
   useEffect(() => { load() }, [])
+
+  // Filtrar evaluaciones y jugadores por el deporte activo
+  const jugadoresFiltrados = jugadores.filter(j => {
+    if (selectedSportId && selectedSportId !== 'todos') {
+      return String(j.disciplina_id) === String(selectedSportId)
+    }
+    return true
+  })
+
+  const evalsFiltradas = evals.filter(ev => {
+    if (selectedSportId && selectedSportId !== 'todos') {
+      const j = jugadores.find(jug => jug.id === ev.jugador_id)
+      return j ? String(j.disciplina_id) === String(selectedSportId) : true
+    }
+    return true
+  })
 
   const handleJugadorChange = async (id) => {
     if (!id) return setForm(EMPTY);
@@ -80,18 +98,21 @@ export default function Evaluaciones() {
     <div>
       <div className="page-header">
         <h2>Evaluaciones de Rendimiento</h2>
-        <p>Análisis físico y composición corporal (Radar Chart)</p>
+        <p>
+          Análisis físico y composición corporal (Radar Chart)
+          {selectedSportId && selectedSportId !== 'todos' ? ` — Deporte: ${selectedSport?.nombre}` : ''}
+        </p>
       </div>
 
       <div className="page-toolbar">
-        <span style={{ color: 'var(--text-muted)', fontSize: 14 }}>{evals.length} evaluaciones</span>
+        <span style={{ color: 'var(--text-muted)', fontSize: 14 }}>{evalsFiltradas.length} evaluaciones registradas</span>
         <button className="btn btn-primary" onClick={() => { setForm(EMPTY); setModal(true) }}>
           <Plus size={16} /> Nueva Evaluación
         </button>
       </div>
 
       <div className="dashboard-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(450px, 1fr))' }}>
-        {loading ? <LoadingSpinner /> : evals.map(ev => (
+        {loading ? <LoadingSpinner /> : evalsFiltradas.map(ev => (
           <div key={ev.id} className="card" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div>
@@ -151,7 +172,7 @@ export default function Evaluaciones() {
               <label>Jugador *</label>
               <select value={form.jugador_id} onChange={e => handleJugadorChange(e.target.value)}>
                 <option value="">Seleccionar...</option>
-                {jugadores.map(j => <option key={j.id} value={j.id}>{j.nombre}</option>)}
+                {jugadoresFiltrados.map(j => <option key={j.id} value={j.id}>{j.nombre} {j.disciplina_nombre ? `(${j.disciplina_nombre})` : ''}</option>)}
               </select>
             </div>
             <div className="form-group"><label>Fecha</label><input type="date" value={form.fecha} onChange={e => setForm({...form, fecha: e.target.value})} /></div>

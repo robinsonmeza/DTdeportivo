@@ -4,11 +4,15 @@ import toast from 'react-hot-toast'
 import Modal from '../components/Modal'
 import LoadingSpinner from '../components/LoadingSpinner'
 import api from '../services/api'
+import { useAuth } from '../context/AuthContext'
 
 const EMPTY = { fecha: '', tipo: '', descripcion: '' }
 const TIPOS  = ['Resistencia','Fuerza','Táctica','Velocidad','Técnica','Físico General','Recuperación']
 
 export default function Entrenamientos() {
+  const { tienePermiso } = useAuth()
+  const puedeEditar = tienePermiso(['administrador', 'entrenador'])
+
   const [entrenamientos, setEntrenamientos] = useState([])
   const [loading, setLoading]               = useState(true)
   const [modal, setModal]                   = useState(false)
@@ -74,9 +78,11 @@ export default function Entrenamientos() {
           <Dumbbell size={15} style={{ display: 'inline', marginRight: 6 }} />
           {entrenamientos.length} sesiones registradas
         </span>
-        <button className="btn btn-primary" onClick={openCreate}>
-          <Plus size={16} /> Nuevo Entrenamiento
-        </button>
+        {puedeEditar && (
+          <button className="btn btn-primary" onClick={openCreate}>
+            <Plus size={16} /> Nuevo Entrenamiento
+          </button>
+        )}
       </div>
 
       <div className="card" style={{ padding: 0 }}>
@@ -89,7 +95,12 @@ export default function Entrenamientos() {
           <div className="table-wrapper">
             <table>
               <thead>
-                <tr><th>Fecha</th><th>Tipo</th><th>Descripción</th><th>Acciones</th></tr>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Tipo</th>
+                  <th>Descripción</th>
+                  {puedeEditar && <th>Acciones</th>}
+                </tr>
               </thead>
               <tbody>
                 {entrenamientos.map(e => (
@@ -97,16 +108,18 @@ export default function Entrenamientos() {
                     <td style={{ fontWeight: 600 }}>{new Date(e.fecha).toLocaleDateString('es', { day:'2-digit', month:'short', year:'numeric' })}</td>
                     <td><span className="badge badge-purple">{e.tipo}</span></td>
                     <td style={{ color: 'var(--text-muted)', fontSize: 13 }}>{e.descripcion || '—'}</td>
-                    <td>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <button className="btn btn-ghost btn-sm" onClick={() => openEdit(e)}>
-                          <Pencil size={13} /> Editar
-                        </button>
-                        <button className="btn btn-danger btn-sm" onClick={() => handleDelete(e.id)}>
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    </td>
+                    {puedeEditar && (
+                      <td>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button className="btn btn-ghost btn-sm" onClick={() => openEdit(e)}>
+                            <Pencil size={13} /> Editar
+                          </button>
+                          <button className="btn btn-danger btn-sm" onClick={() => handleDelete(e.id)}>
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

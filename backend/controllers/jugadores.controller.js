@@ -42,6 +42,8 @@ exports.uploadPhoto = async (req, res) => {
 // GET /api/jugadores
 exports.getAll = async (req, res) => {
   try {
+    const { disciplina_id, equipo_id } = req.query;
+
     // Si es jugador, solo devuelve su propio registro
     if (req.usuario?.rol === 'jugador') {
       const { rows } = await db.query(
@@ -54,13 +56,26 @@ exports.getAll = async (req, res) => {
       );
       return res.json(rows);
     }
-    const { rows } = await db.query(
-      `SELECT j.*, eq.nombre AS equipo_nombre, d.nombre AS disciplina_nombre
-       FROM jugadores j
-       LEFT JOIN equipos eq ON j.equipo_id = eq.id
-       LEFT JOIN disciplinas d ON j.disciplina_id = d.id
-       ORDER BY j.nombre ASC`
-    );
+
+    let query = `
+      SELECT j.*, eq.nombre AS equipo_nombre, d.nombre AS disciplina_nombre
+      FROM jugadores j
+      LEFT JOIN equipos eq ON j.equipo_id = eq.id
+      LEFT JOIN disciplinas d ON j.disciplina_id = d.id
+    `;
+    const params = [];
+
+    if (disciplina_id) {
+      params.push(disciplina_id);
+      query += ` WHERE j.disciplina_id = $${params.length}`;
+    } else if (equipo_id) {
+      params.push(equipo_id);
+      query += ` WHERE j.equipo_id = $${params.length}`;
+    }
+
+    query += ` ORDER BY j.nombre ASC`;
+
+    const { rows } = await db.query(query, params);
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -105,10 +120,6 @@ exports.create = async (req, res) => {
   const { nombre, edad, posicion, peso, altura, equipo_id, disciplina_id } = req.body;
   if (!nombre) return res.status(400).json({ error: 'El nombre es obligatorio' });
 
-  // Un jugador no puede tener equipo Y disciplina al mismo tiempo
-  if (equipo_id && disciplina_id)
-    return res.status(400).json({ error: 'Un jugador solo puede estar en un equipo O tener una disciplina, no ambos' });
-
   try {
     const { rows } = await db.query(
       `INSERT INTO jugadores (nombre, edad, posicion, peso, altura, equipo_id, disciplina_id)
@@ -122,12 +133,91 @@ exports.create = async (req, res) => {
   }
 };
 
+// POST /api/jugadores/bulk
+// Importación masiva desde CSV
+exports.bulkCreate = async (req, res) => {
+  const { deportistas } = req.body;
+  if (!Array.isArray(deportistas) || deportistas.length === 0) {
+    return res.status(400).json({ error: 'Se requiere una lista de deportistas' });
+  }
+
+  try {
+    const client = await db.connect();
+    const inserted = [];
+    const errors = [];
+
+    try {
+      await client.query('BEGIN');
+
+      for (let i = 0; i < deportistas.length; i++) {
+        const item = deportistas[i];
+        const nombre = item.nombre ? item.nombre.trim() : '';
+        if (!nombre) {
+          errors.push({ fila: i + 1, error: 'Nombre vacío' });
+          continue;
+        }
+
+        let disciplina_id = item.disciplina_id || null;
+        // Si viene nombre de deporte o disciplina por texto, buscarla o crearla
+        if (!disciplina_id && item.deporte) {
+          const depName = item.deporte.trim();
+          const { rows: dRows } = await client.query('SELECT id FROM disciplinas WHERE LOWER(nombre) = LOWER($1)', [depName]);
+          if (dRows.length > 0) {
+            disciplina_id = dRows[0].id;
+          } else {
+            const { rows: newD } = await client.query('INSERT INTO disciplinas (nombre) VALUES ($1) RETURNING id', [depName]);
+            disciplina_id = newD[0].id;
+          }
+        }
+
+        let equipo_id = item.equipo_id || null;
+        if (!equipo_id && item.equipo) {
+          const eqName = item.equipo.trim();
+          const { rows: eRows } = await client.query('SELECT id FROM equipos WHERE LOWER(nombre) = LOWER($1)', [eqName]);
+          if (eRows.length > 0) {
+            equipo_id = eRows[0].id;
+          } else {
+            const { rows: newE } = await client.query('INSERT INTO equipos (nombre) VALUES ($1) RETURNING id', [eqName]);
+            equipo_id = newE[0].id;
+          }
+        }
+
+        const edad = item.edad ? parseInt(item.edad, 10) : null;
+        const peso = item.peso ? parseFloat(item.peso) : null;
+        const altura = item.altura ? parseFloat(item.altura) : null;
+        const posicion = item.posicion ? item.posicion.trim() : null;
+
+        const { rows } = await client.query(
+          `INSERT INTO jugadores (nombre, edad, posicion, peso, altura, equipo_id, disciplina_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+          [nombre, isNaN(edad) ? null : edad, posicion, isNaN(peso) ? null : peso, isNaN(altura) ? null : altura, equipo_id, disciplina_id]
+        );
+
+        inserted.push({ id: rows[0].id, nombre, posicion, disciplina_id, equipo_id });
+      }
+
+      await client.query('COMMIT');
+    } catch (txErr) {
+      await client.query('ROLLBACK');
+      throw txErr;
+    } finally {
+      client.release();
+    }
+
+    res.status(201).json({
+      message: `Se importaron ${inserted.length} deportistas correctamente`,
+      total: inserted.length,
+      insertados: inserted,
+      errores: errors
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Error al procesar la importación: ' + err.message });
+  }
+};
+
 // PUT /api/jugadores/:id
 exports.update = async (req, res) => {
   const { nombre, edad, posicion, peso, altura, equipo_id, disciplina_id } = req.body;
-
-  if (equipo_id && disciplina_id)
-    return res.status(400).json({ error: 'Un jugador solo puede estar en un equipo O tener una disciplina, no ambos' });
 
   try {
     const { rowCount } = await db.query(
