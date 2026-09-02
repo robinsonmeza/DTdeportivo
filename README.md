@@ -1,160 +1,189 @@
-# DTdeportivo — Sistema de Gestión Deportiva
+# DTdeportivo — Sistema de Gestión Deportiva Integral
 
-Plataforma web full-stack para gestión integral de equipos y jugadores deportivos.  
-**Stack:** React 18 + Vite · Node.js + Express · PostgreSQL (Neon) · Vercel
+Plataforma web full-stack para la gestión integral, médica, física, técnica y táctica de clubes, equipos y deportistas multidisciplinarios.
+
+**Stack Tecnológico:**
+- **Frontend:** React 18, Vite, React Router 6, Recharts, Lucide Icons, React Hot Toast
+- **Backend:** Node.js, Express, JWT (Access + Refresh tokens), Multer
+- **Base de Datos:** PostgreSQL (Cloud SQL / Neon)
+- **Persistencia de Archivos:** Carga de imágenes para escudos de equipos y fotos de deportistas
 
 ---
 
-## Estructura del proyecto
+## Estructura del Proyecto
 
 ```
 DTdeportivo/
-├── backend/                       → API REST (Puerto 3001)
+├── backend/                       → API REST (Node.js + Express)
 │   ├── config/
-│   │   ├── db.js                  ← Conexión PostgreSQL (Neon)
-│   │   ├── database.sql           ← Schema completo PostgreSQL
-│   │   └── seed.js                ← Credenciales de prueba
-│   ├── controllers/               ← Lógica de negocio (12 controladores)
+│   │   ├── db.js                  ← Conexión PostgreSQL (Cloud SQL / Neon)
+│   │   ├── database.sql           ← Schema DDL completo
+│   │   ├── seed.js                ← Semilla de prueba y credenciales base
+│   │   └── seed_cloudsql.js       ← Inicializador para Cloud SQL
+│   ├── controllers/               ← Controladores de la API (13 controladores)
+│   │   ├── antropometria.controller.js
+│   │   ├── asistencia.controller.js
+│   │   ├── auth.controller.js
+│   │   ├── dashboard.controller.js
+│   │   ├── disciplinas.controller.js
+│   │   ├── entrenamientos.controller.js
+│   │   ├── equipos.controller.js
+│   │   ├── estadisticas.controller.js
+│   │   ├── evaluaciones.controller.js
+│   │   ├── jugadores.controller.js
+│   │   ├── lesiones.controller.js
+│   │   ├── partidos.controller.js
+│   │   ├── settings.controller.js
+│   │   └── usuarios.controller.js
 │   ├── middleware/
-│   │   └── auth.js                ← JWT + control de roles
-│   ├── routes/                    ← Endpoints REST (12 archivos)
-│   ├── uploads/players/           ← Fotos de jugadores
-│   ├── .env.example               ← Plantilla de variables
-│   └── server.js                  ← Entrada Express
-├── frontend/                      → React + Vite (Puerto 3000)
+│   │   └── auth.js                ← Validación JWT + RBAC (Roles)
+│   ├── routes/                    ← Rutas y endpoints REST
+│   ├── uploads/                   ← Archivos estáticos subidos
+│   │   ├── players/               ← Fotos de perfil de deportistas
+│   │   └── teams/                 ← Escudos e insignias de equipos
+│   ├── .env.example               ← Variables de entorno requeridas
+│   └── server.js                  ← Servidor backend Express
+├── frontend/                      → SPA (React + Vite)
 │   └── src/
+│       ├── components/            ← Navbar, Modales, Somatocarta, StatCards, Spinners
 │       ├── context/
-│       │   └── AuthContext.jsx    ← Estado global de autenticación
-│       ├── components/
-│       │   ├── Navbar.jsx         ← Menú filtrado por rol
-│       │   ├── ProtectedRoute.jsx ← Rutas protegidas
-│       │   ├── Modal.jsx
-│       │   ├── StatCard.jsx
-│       │   ├── LoadingSpinner.jsx
-│       │   └── Somatocarta.jsx
-│       ├── pages/                 ← 10 páginas
-│       └── services/
-│           └── api.js             ← Axios + JWT + refresh automático
-├── vercel.json                    ← Configuración despliegue
-└── IMPLEMENTACION.md              ← Próximas funcionalidades pendientes
+│       │   ├── AuthContext.jsx    ← Autenticación, tokens y permisos RBAC
+│       │   └── DeporteContext.jsx ← Selector global de disciplina deportiva
+│       ├── pages/                 ← Vistas y módulos de la aplicación
+│       │   ├── Antropometria.jsx  ← Protocolo ISAK-1 y Somatocarta Heath-Carter
+│       │   ├── Asistencia.jsx     ← Registro de asistencia por sesión
+│       │   ├── Dashboard.jsx      ← Métricas globales y accesos rápidos
+│       │   ├── Entrenamientos.jsx ← Planificación y sesiones de entreno
+│       │   ├── Equipos.jsx        ← Gestión de clubes, escudos y nómina de atletas
+│       │   ├── EstadisticasJugador.jsx ← Goles, asistencias, minutos y puntos
+│       │   ├── Evaluaciones.jsx   ← Evaluaciones físicas, antropométricas y de Rugby
+│       │   ├── Jugadores.jsx      ← Fichas de deportistas y perfiles técnicos
+│       │   ├── Lesiones.jsx       ← Historial médico y seguimiento de bajas
+│       │   ├── Login.jsx          ← Inicio de sesión seguro
+│       │   ├── Partidos.jsx       ← Calendario y resultados de encuentros
+│       │   └── Usuarios.jsx       ← Gestión de usuarios y cuentas (Solo Admin)
+│       ├── services/
+│       │   └── api.js             ← Cliente Axios con interceptor de tokens
+│       └── utils/
+│           └── image.js           ← Normalizador de URLs de imágenes
+├── metadata.json                  ← Metadatos del applet
+└── IMPLEMENTACION.md              ← Hoja de ruta de funcionalidades futuras
 ```
 
 ---
 
-## Roles y permisos
+## Módulos del Sistema
 
-| Módulo | Admin | Entrenador | Personal Salud | Jugador |
+1. **Dashboard:** Métricas generales consolidadas, distribución de deportistas por disciplina, estado de bajas por lesión, próximos partidos y accesos rápidos.
+2. **Equipos:** Creación y administración de equipos, soporte para escudos/logos personalizados, visualización de nómina y asignación rápida de atletas.
+3. **Jugadores / Deportistas:** Fichas técnicas individuales con foto de perfil, datos biométricos, posición deportiva, disciplina y club asociado.
+4. **Entrenamientos:** Planificación de sesiones de entrenamiento con ubicación, intensidad, objetivos y fecha.
+5. **Asistencia:** Toma de asistencia rápida por sesión de entrenamiento con estados (Presente, Ausente, Justificado, Lesionado).
+6. **Partidos:** Registro de calendario, rivales, marcadores, localía y estado del encuentro.
+7. **Estadísticas de Rendimiento:** Registro de goles, puntos, asistencias y minutos disputados por partido.
+8. **Lesiones y Salud:** Bitácora médica con tipo de lesión, diagnóstico, fecha de inicio y alta médica.
+9. **Evaluaciones Físicas y Rugby:** Tests físicos generales y batería específica de Rugby (velocidad, resistencia, salto, fuerza máxima y agilidad).
+10. **Antropometría ISAK-1:** Cálculo automatizado de composición corporal de 5 componentes, cálculo de somatotipo (Endomorfia, Mesomorfia, Ectomorfia) y renderizado interactivo en la **Somatocarta de Heath-Carter**.
+11. **Gestión de Usuarios (RBAC):** Creación individual y masiva mediante archivo CSV, asignación de roles y restablecimiento de claves.
+
+---
+
+## Matriz de Roles y Permisos (RBAC)
+
+| Módulo | Administrador | Entrenador | Personal de Salud | Jugador |
 |---|:---:|:---:|:---:|:---:|
-| Dashboard | ✅ | ✅ | ✅ | ✅ |
-| Jugadores (CRUD) | ✅ | ✅ | 👁️ | 👁️ propio |
-| Entrenamientos | ✅ | ✅ | ❌ | 👁️ |
-| Asistencia | ✅ | ✅ | ❌ | 👁️ |
-| Lesiones | ✅ | 👁️ | ✅ | 👁️ propio |
-| Evaluaciones | ✅ | 👁️ | ✅ | 👁️ propio |
-| Partidos | ✅ | ✅ | ❌ | 👁️ |
-| Estadísticas | ✅ | ✅ | 👁️ | 👁️ propio |
-| Antropometría | ✅ | 👁️ | ✅ | 👁️ propio |
-| Usuarios | ✅ | ✅ parcial | ❌ | ❌ |
-
-**Reglas de creación de usuarios:**
-- Administrador puede crear cualquier rol
-- Entrenador solo puede crear `jugador` y `personal_salud`
-- Ambos pueden hacer carga masiva por CSV
+| **Dashboard** | ✅ Completo | ✅ Completo | ✅ Completo | ✅ Vista Atleta |
+| **Equipos** | ✅ Gestión | ✅ Gestión | 👁️ Consulta | ❌ |
+| **Jugadores** | ✅ Gestión | ✅ Gestión | 👁️ Consulta | 👁️ Perfil propio |
+| **Entrenamientos** | ✅ Gestión | ✅ Gestión | 👁️ Consulta | 👁️ Consulta |
+| **Asistencia** | ✅ Gestión | ✅ Gestión | 👁️ Consulta | 👁️ Consulta |
+| **Partidos** | ✅ Gestión | ✅ Gestión | 👁️ Consulta | 👁️ Consulta |
+| **Estadísticas** | ✅ Gestión | ✅ Gestión | 👁️ Consulta | 👁️ Rendimiento propio |
+| **Lesiones** | ✅ Gestión | 👁️ Consulta | ✅ Gestión | 👁️ Historial propio |
+| **Evaluaciones** | ✅ Gestión | ✅ Gestión | ✅ Gestión | 👁️ Ficha propia |
+| **Antropometría** | ✅ Gestión | 👁️ Consulta | ✅ Gestión | 👁️ Mediciones propias |
+| **Usuarios** | ✅ Exclusivo | ❌ | ❌ | ❌ |
 
 ---
 
-## Asociación de jugadores
+## Credenciales de Prueba
 
-Un jugador puede estar asociado a **una sola** de estas opciones:
-- **Equipo** → pertenece a un club/equipo registrado
-- **Disciplina deportiva** → practica una disciplina individual (puede escribirse manualmente)
-
----
-
-## Credenciales de prueba
-
-| Rol | Email | Contraseña |
+| Rol | Correo Electrónico | Contraseña |
 |---|---|---|
-| Administrador | admin@dtdeportivo.com | Admin123! |
-| Entrenador | entrenador@dtdeportivo.com | Coach123! |
-| Personal Salud | salud@dtdeportivo.com | Salud123! |
-| Jugador | jugador@dtdeportivo.com | Jugador123! |
+| **Administrador** | `admin@dtdeportivo.com` | `Admin123!` |
+| **Entrenador** | `entrenador@dtdeportivo.com` | `Coach123!` |
+| **Personal de Salud** | `salud@dtdeportivo.com` | `Salud123!` |
+| **Jugador** | `jugador@dtdeportivo.com` | `Jugador123!` |
 
 ---
 
-## Ejecución local
+## Puesta en Marcha y Ejecución Local
 
-**Requisitos:** Node.js 18+, cuenta Neon (PostgreSQL)
+### Requisitos previos
+- Node.js 18+ o superior
+- Base de datos PostgreSQL activa
+
+### Configuración del Backend
 
 ```bash
-# Backend
 cd backend
-cp .env.example .env      # Completar DATABASE_URL, JWT_SECRET, JWT_REFRESH_SECRET
+cp .env.example .env
 npm install
-npm run seed              # Crea tablas y usuarios de prueba
-npm run dev               # Puerto 3001
+npm run seed     # Inicializa las tablas y los usuarios de prueba
+npm run dev      # Inicia el servidor API en el puerto configurado
+```
 
-# Frontend (otra terminal)
+### Configuración del Frontend
+
+```bash
 cd frontend
 npm install
-npm run dev               # Puerto 3000 → http://localhost:3000
+npm run dev      # Inicia el servidor Vite en http://localhost:3000
 ```
 
-### Variables de entorno (`backend/.env`)
+### Variables de Entorno Requeridas (`.env`)
 
-```
-DATABASE_URL=postgresql://user:password@host/db?sslmode=require
-JWT_SECRET=secreto_seguro
-JWT_REFRESH_SECRET=secreto_refresh_diferente
-PORT=3001
+```env
+DATABASE_URL=postgresql://usuario:password@host:5432/dtdeportivo?sslmode=require
+JWT_SECRET=tu_clave_secreta_jwt
+JWT_REFRESH_SECRET=tu_clave_secreta_refresh_jwt
+PORT=3000
 NODE_ENV=development
-FRONTEND_URL=http://localhost:3000
 ```
 
 ---
 
-## Despliegue (Vercel + Neon)
+## API — Endpoints Principales
 
-El proyecto usa `vercel.json` con `experimentalServices`:
-- **Frontend** → Vite, ruta `/`
-- **Backend** → Express, ruta `/_/backend`
-
-Variables de entorno requeridas en Vercel:
-```
-VITE_API_URL=/_/backend/api
-DATABASE_URL=...
-JWT_SECRET=...
-JWT_REFRESH_SECRET=...
-NODE_ENV=production
-```
-
----
-
-## API — Endpoints principales
-
-| Método | Ruta | Descripción |
-|---|---|---|
-| POST | `/api/auth/login` | Iniciar sesión |
-| POST | `/api/auth/refresh` | Renovar token |
-| GET | `/api/auth/me` | Usuario actual |
-| PUT | `/api/auth/cambiar-password` | Cambiar contraseña |
-| GET/POST | `/api/jugadores` | Listar / crear jugadores |
-| GET/POST | `/api/usuarios` | Listar / crear usuarios |
-| POST | `/api/usuarios/csv` | Carga masiva CSV |
-| GET/POST | `/api/equipos` | Equipos |
-| GET/POST | `/api/disciplinas` | Disciplinas deportivas |
-| GET | `/api/dashboard` | Resumen general |
+| Método | Endpoint | Descripción | Acceso |
+|---|---|---|---|
+| `POST` | `/api/auth/login` | Inicio de sesión y obtención de tokens JWT | Público |
+| `POST` | `/api/auth/refresh` | Renovación de token de acceso | Autenticado |
+| `GET` | `/api/auth/me` | Datos del perfil de usuario en sesión | Autenticado |
+| `GET` / `POST` | `/api/equipos` | Listado y registro de equipos con escudo | Admin, Entrenador |
+| `POST` | `/api/equipos/:id/logo` | Carga de escudo del equipo (multipart/form-data) | Admin, Entrenador |
+| `GET` / `POST` | `/api/jugadores` | Listado y creación de fichas de atletas | Admin, Entrenador |
+| `POST` | `/api/jugadores/:id/foto` | Carga de foto de perfil del deportista | Admin, Entrenador |
+| `GET` / `POST` | `/api/antropometria` | Registros antropométricos y somatotipo ISAK | Admin, Salud |
+| `GET` / `POST` | `/api/lesiones` | Historial médico y seguimiento de lesiones | Admin, Salud |
+| `GET` / `POST` | `/api/evaluaciones` | Evaluaciones de condición física y Rugby | Admin, Entrenador, Salud |
+| `GET` / `POST` | `/api/asistencia` | Marcación de asistencia por entrenamiento | Admin, Entrenador |
+| `GET` / `POST` | `/api/entrenamientos`| Cronograma de sesiones deportivas | Admin, Entrenador |
+| `GET` / `POST` | `/api/partidos` | Calendario y marcadores de encuentros | Admin, Entrenador |
+| `GET` / `POST` | `/api/usuarios` | Administración de cuentas de usuario | Solo Administrador |
+| `POST` | `/api/usuarios/csv` | Carga masiva de usuarios vía CSV | Solo Administrador |
 
 ---
 
-## Formato CSV — Carga masiva de usuarios
+## Formato CSV para Carga Masiva de Usuarios
 
-El archivo debe tener las columnas: `nombre, email, password, rol`
+Cabeceras obligatorias: `nombre, email, password, rol`
 
 ```csv
 nombre,email,password,rol
-Juan Pérez,juan@club.com,Pass123!,jugador
-Ana López,ana@club.com,Pass123!,personal_salud
+Carlos Alarcón,carlos@club.com,Clave123!,entrenador
+Dra. Mariana Ortiz,mariana@club.com,Clave123!,personal_salud
+Felipe Gómez,felipe@club.com,Clave123!,jugador
 ```
 
-Roles válidos: `administrador`, `entrenador`, `personal_salud`, `jugador`
+*Roles aceptados:* `administrador`, `entrenador`, `personal_salud`, `jugador`
