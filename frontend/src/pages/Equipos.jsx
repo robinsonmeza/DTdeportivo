@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Modal from '../components/Modal'
+import ConfirmModal from '../components/ConfirmModal'
 import LoadingSpinner from '../components/LoadingSpinner'
 import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
@@ -62,6 +63,8 @@ export default function Equipos() {
   // Subida rápida de logo desde la tarjeta
   const cardFileInputRef = useRef(null)
   const [uploadingLogoId, setUploadingLogoId] = useState(null)
+  const [deleteModal, setDeleteModal] = useState({ isOpen: false, equipo: null, loading: false })
+  const [unlinkModal, setUnlinkModal] = useState({ isOpen: false, jugador: null, loading: false })
 
   const cargarEquipos = async () => {
     setLoading(true)
@@ -218,19 +221,24 @@ export default function Equipos() {
   }
 
   // Eliminar equipo
-  const handleDelete = async (eq) => {
-    if (!confirm(`¿Estás seguro de eliminar el equipo "${eq.nombre}"? Los deportistas asignados quedarán sin equipo pero no serán eliminados.`)) {
-      return
-    }
+  const handleDelete = (eq) => {
+    setDeleteModal({ isOpen: true, equipo: eq, loading: false })
+  }
+
+  const handleConfirmDelete = async () => {
+    if (!deleteModal.equipo) return
+    setDeleteModal(prev => ({ ...prev, loading: true }))
     try {
-      await api.delete(`/equipos/${eq.id}`)
-      toast.success('Equipo eliminado')
-      cargarEquipos()
-      if (equipoDetalle && equipoDetalle.id === eq.id) {
+      await api.delete(`/equipos/${deleteModal.equipo.id}`)
+      toast.success(`Equipo "${deleteModal.equipo.nombre}" eliminado correctamente`)
+      if (equipoDetalle && equipoDetalle.id === deleteModal.equipo.id) {
         setModalPlantilla(false)
       }
+      setDeleteModal({ isOpen: false, equipo: null, loading: false })
+      cargarEquipos()
     } catch (e) {
-      toast.error(e.message || 'Error al eliminar el equipo')
+      toast.error(e.response?.data?.error || e.message || 'Error al eliminar el equipo')
+      setDeleteModal(prev => ({ ...prev, loading: false }))
     }
   }
 
@@ -276,9 +284,15 @@ export default function Equipos() {
   }
 
   // Desvincular deportista del equipo
-  const desvincularJugador = async (jugador) => {
-    if (!confirm(`¿Desvincular a ${jugador.nombre} de ${equipoDetalle.nombre}?`)) return
+  const desvincularJugador = (jugador) => {
+    setUnlinkModal({ isOpen: true, jugador, loading: false })
+  }
+
+  const handleConfirmUnlink = async () => {
+    if (!unlinkModal.jugador) return
+    setUnlinkModal(prev => ({ ...prev, loading: true }))
     try {
+      const jugador = unlinkModal.jugador
       await api.put(`/jugadores/${jugador.id}`, {
         nombre: jugador.nombre,
         edad: jugador.edad,
@@ -289,10 +303,12 @@ export default function Equipos() {
         equipo_id: null
       })
       toast.success('Deportista desvinculado del equipo')
-      verPlantilla(equipoDetalle)
+      setUnlinkModal({ isOpen: false, jugador: null, loading: false })
+      if (equipoDetalle) verPlantilla(equipoDetalle)
       cargarEquipos()
     } catch (e) {
-      toast.error('Error al desvincular deportista: ' + e.message)
+      toast.error('Error al desvincular deportista: ' + (e.response?.data?.error || e.message))
+      setUnlinkModal(prev => ({ ...prev, loading: false }))
     }
   }
 
@@ -971,6 +987,32 @@ export default function Equipos() {
           </div>
         </Modal>
       )}
+
+      {/* Modal de confirmación para eliminar equipo */}
+      <ConfirmModal
+        isOpen={deleteModal.isOpen}
+        title="¿Eliminar equipo?"
+        message={`¿Estás seguro de que deseas eliminar el equipo "${deleteModal.equipo?.nombre}"? Los deportistas asignados quedarán sin equipo pero no serán eliminados.`}
+        confirmText="Sí, Eliminar"
+        cancelText="Cancelar"
+        confirmVariant="danger"
+        loading={deleteModal.loading}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteModal({ isOpen: false, equipo: null, loading: false })}
+      />
+
+      {/* Modal de confirmación para desvincular jugador */}
+      <ConfirmModal
+        isOpen={unlinkModal.isOpen}
+        title="¿Desvincular deportista?"
+        message={`¿Estás seguro de desvincular a "${unlinkModal.jugador?.nombre}" de "${equipoDetalle?.nombre}"? El deportista permanecerá registrado en el sistema sin equipo asignado.`}
+        confirmText="Sí, Desvincular"
+        cancelText="Cancelar"
+        confirmVariant="warning"
+        loading={unlinkModal.loading}
+        onConfirm={handleConfirmUnlink}
+        onCancel={() => setUnlinkModal({ isOpen: false, jugador: null, loading: false })}
+      />
     </div>
   )
 }

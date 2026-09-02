@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
-import { Users, Plus, Upload, Edit2, Trash2, RefreshCw, X, Check } from 'lucide-react'
+import { Users, Plus, Upload, Edit2, Trash2, RefreshCw, X, Check, KeyRound } from 'lucide-react'
 import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import toast from 'react-hot-toast'
+import ConfirmModal from '../components/ConfirmModal'
+import Modal from '../components/Modal'
 
 const ROLES = ['administrador', 'entrenador', 'personal_salud', 'jugador']
 const ROLE_LABELS = {
@@ -30,6 +32,8 @@ export default function Usuarios() {
 
   const [form, setForm] = useState({ nombre: '', email: '', password: '', rol: 'jugador' })
   const [csvResultado, setCsvResultado] = useState(null)
+  const [deleteModal, setDeleteModal] = useState({ isOpen: false, usuario: null, loading: false })
+  const [resetModal, setResetModal] = useState({ isOpen: false, usuario: null, newPassword: '', loading: false })
 
   const cargar = async () => {
     setCargando(true)
@@ -74,25 +78,41 @@ export default function Usuarios() {
     }
   }
 
-  const resetPassword = async (u) => {
-    const pwd = prompt(`Nueva contraseña para ${u.nombre}:`)
-    if (!pwd) return
+  const abrirResetPassword = (u) => {
+    setResetModal({ isOpen: true, usuario: u, newPassword: '', loading: false })
+  }
+
+  const handleConfirmReset = async (e) => {
+    e?.preventDefault()
+    if (!resetModal.newPassword || resetModal.newPassword.length < 6) {
+      return toast.error('La contraseña debe tener al menos 6 caracteres')
+    }
+    setResetModal(prev => ({ ...prev, loading: true }))
     try {
-      await api.put(`/usuarios/${u.id}/reset`, { password: pwd })
-      toast.success('Contraseña restablecida')
+      await api.put(`/usuarios/${resetModal.usuario.id}/reset`, { password: resetModal.newPassword })
+      toast.success(`Contraseña de ${resetModal.usuario.nombre} restablecida`)
+      setResetModal({ isOpen: false, usuario: null, newPassword: '', loading: false })
     } catch (err) {
-      toast.error(err.message)
+      toast.error(err.response?.data?.error || err.message)
+      setResetModal(prev => ({ ...prev, loading: false }))
     }
   }
 
-  const desactivar = async (u) => {
-    if (!confirm(`¿Desactivar a ${u.nombre}?`)) return
+  const desactivar = (u) => {
+    setDeleteModal({ isOpen: true, usuario: u, loading: false })
+  }
+
+  const handleConfirmDesactivar = async () => {
+    if (!deleteModal.usuario) return
+    setDeleteModal(prev => ({ ...prev, loading: true }))
     try {
-      await api.delete(`/usuarios/${u.id}`)
+      await api.delete(`/usuarios/${deleteModal.usuario.id}`)
       toast.success('Usuario desactivado')
+      setDeleteModal({ isOpen: false, usuario: null, loading: false })
       cargar()
     } catch (err) {
-      toast.error(err.message)
+      toast.error(err.response?.data?.error || err.message)
+      setDeleteModal(prev => ({ ...prev, loading: false }))
     }
   }
 
@@ -201,7 +221,7 @@ export default function Usuarios() {
                       <button className="btn-icon" onClick={() => abrirEditar(u)} title="Editar">
                         <Edit2 size={15} />
                       </button>
-                      <button className="btn-icon" onClick={() => resetPassword(u)} title="Restablecer contraseña">
+                      <button className="btn-icon" onClick={() => abrirResetPassword(u)} title="Restablecer contraseña">
                         <RefreshCw size={15} />
                       </button>
                       {yo?.rol === 'administrador' && u.id !== yo.id && (
@@ -306,6 +326,58 @@ export default function Usuarios() {
           </div>
         </div>
       )}
+
+      {/* Modal de Reset de Contraseña */}
+      {resetModal.isOpen && (
+        <Modal
+          title={`Restablecer Contraseña: ${resetModal.usuario?.nombre}`}
+          onClose={() => setResetModal({ isOpen: false, usuario: null, newPassword: '', loading: false })}
+          footer={
+            <>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setResetModal({ isOpen: false, usuario: null, newPassword: '', loading: false })}
+                disabled={resetModal.loading}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleConfirmReset}
+                disabled={resetModal.loading || !resetModal.newPassword}
+              >
+                {resetModal.loading ? 'Guardando...' : 'Guardar Nueva Contraseña'}
+              </button>
+            </>
+          }
+        >
+          <div className="form-group">
+            <label>Nueva Contraseña *</label>
+            <input
+              type="password"
+              value={resetModal.newPassword}
+              onChange={e => setResetModal(prev => ({ ...prev, newPassword: e.target.value }))}
+              placeholder="Mínimo 6 caracteres"
+              autoFocus
+            />
+          </div>
+        </Modal>
+      )}
+
+      {/* Modal de confirmación para desactivar usuario */}
+      <ConfirmModal
+        isOpen={deleteModal.isOpen}
+        title="¿Desactivar usuario?"
+        message={`¿Estás seguro de que deseas desactivar al usuario "${deleteModal.usuario?.nombre}" (${deleteModal.usuario?.email})? El usuario no podrá iniciar sesión.`}
+        confirmText="Sí, Desactivar"
+        cancelText="Cancelar"
+        confirmVariant="danger"
+        loading={deleteModal.loading}
+        onConfirm={handleConfirmDesactivar}
+        onCancel={() => setDeleteModal({ isOpen: false, usuario: null, loading: false })}
+      />
     </div>
   )
 }

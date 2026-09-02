@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Plus, Pencil, Trash2, Dumbbell } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Modal from '../components/Modal'
+import ConfirmModal from '../components/ConfirmModal'
 import LoadingSpinner from '../components/LoadingSpinner'
 import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
@@ -19,6 +20,7 @@ export default function Entrenamientos() {
   const [form, setForm]                     = useState(EMPTY)
   const [editId, setEditId]                 = useState(null)
   const [saving, setSaving]                 = useState(false)
+  const [deleteModal, setDeleteModal]       = useState({ isOpen: false, id: null, loading: false })
 
   const load = () => {
     setLoading(true)
@@ -55,14 +57,21 @@ export default function Entrenamientos() {
     }
   }
 
-  const handleDelete = async (id) => {
-    if (!confirm('¿Eliminar este entrenamiento?')) return
+  const handleDelete = (id) => {
+    setDeleteModal({ isOpen: true, id, loading: false })
+  }
+
+  const handleConfirmDelete = async () => {
+    if (!deleteModal.id) return
+    setDeleteModal(prev => ({ ...prev, loading: true }))
     try {
-      await api.delete(`/entrenamientos/${id}`)
+      await api.delete(`/entrenamientos/${deleteModal.id}`)
       toast.success('Entrenamiento eliminado')
+      setDeleteModal({ isOpen: false, id: null, loading: false })
       load()
     } catch (e) {
-      toast.error(e.message)
+      toast.error(e.response?.data?.error || e.message)
+      setDeleteModal(prev => ({ ...prev, loading: false }))
     }
   }
 
@@ -161,6 +170,19 @@ export default function Entrenamientos() {
           </div>
         </Modal>
       )}
+
+      {/* Modal de confirmación para eliminar entrenamiento */}
+      <ConfirmModal
+        isOpen={deleteModal.isOpen}
+        title="¿Eliminar sesión de entrenamiento?"
+        message="¿Estás seguro de que deseas eliminar este entrenamiento y sus registros de asistencia correspondientes?"
+        confirmText="Sí, Eliminar"
+        cancelText="Cancelar"
+        confirmVariant="danger"
+        loading={deleteModal.loading}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteModal({ isOpen: false, id: null, loading: false })}
+      />
     </div>
   )
 }

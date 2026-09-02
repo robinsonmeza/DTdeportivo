@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Plus, Pencil, Trash2, HeartPulse } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Modal from '../components/Modal'
+import ConfirmModal from '../components/ConfirmModal'
 import LoadingSpinner from '../components/LoadingSpinner'
 import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
@@ -21,6 +22,7 @@ export default function Lesiones() {
   const [form, setForm]           = useState(EMPTY)
   const [editId, setEditId]       = useState(null)
   const [saving, setSaving]       = useState(false)
+  const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null, loading: false })
 
   const load = async () => {
     setLoading(true)
@@ -80,10 +82,22 @@ export default function Lesiones() {
     finally { setSaving(false) }
   }
 
-  const handleDelete = async (id) => {
-    if (!confirm('¿Eliminar esta lesión?')) return
-    try { await api.delete(`/lesiones/${id}`); toast.success('Lesión eliminada'); load() }
-    catch (e) { toast.error(e.message) }
+  const handleDelete = (id) => {
+    setDeleteModal({ isOpen: true, id, loading: false })
+  }
+
+  const handleConfirmDelete = async () => {
+    if (!deleteModal.id) return
+    setDeleteModal(prev => ({ ...prev, loading: true }))
+    try {
+      await api.delete(`/lesiones/${deleteModal.id}`)
+      toast.success('Lesión eliminada')
+      setDeleteModal({ isOpen: false, id: null, loading: false })
+      load()
+    } catch (e) {
+      toast.error(e.response?.data?.error || e.message)
+      setDeleteModal(prev => ({ ...prev, loading: false }))
+    }
   }
 
   const activas = lesionesFiltradas.filter(l => !l.fecha_fin)
@@ -199,6 +213,19 @@ export default function Lesiones() {
           </div>
         </Modal>
       )}
+
+      {/* Modal de confirmación para eliminar lesión */}
+      <ConfirmModal
+        isOpen={deleteModal.isOpen}
+        title="¿Eliminar registro de lesión?"
+        message="¿Estás seguro de que deseas eliminar este registro médico de lesión? Esta acción es irreversible."
+        confirmText="Sí, Eliminar"
+        cancelText="Cancelar"
+        confirmVariant="danger"
+        loading={deleteModal.loading}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteModal({ isOpen: false, id: null, loading: false })}
+      />
     </div>
   )
 }

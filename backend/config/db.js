@@ -6,10 +6,7 @@ let pgPool = null;
 let firestoreAdapter = null;
 
 function shouldUseFirestore() {
-  // If explicitly forced or no PostgreSQL credentials provided, use Firebase Firestore
-  if (process.env.USE_FIREBASE === 'true') return true;
-  if (process.env.SQL_HOST && process.env.SQL_USER && process.env.SQL_DB_NAME) return false;
-  if (process.env.DATABASE_URL && !process.env.DATABASE_URL.includes('placeholder') && !process.env.DATABASE_URL.includes('127.0.0.1')) return false;
+  if (process.env.USE_FIREBASE === 'false') return false;
   return true;
 }
 

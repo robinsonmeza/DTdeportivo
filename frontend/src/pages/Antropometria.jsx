@@ -9,6 +9,7 @@ import {
 } from 'recharts'
 import toast from 'react-hot-toast'
 import Modal from '../components/Modal'
+import ConfirmModal from '../components/ConfirmModal'
 import LoadingSpinner from '../components/LoadingSpinner'
 import Somatocarta from '../components/Somatocarta'
 import api from '../services/api'
@@ -41,6 +42,7 @@ export default function Antropometria() {
   const [editId, setEditId] = useState(null)
   const [form, setForm] = useState(EMPTY_ANTRO)
   const [saving, setSaving] = useState(false)
+  const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null, loading: false })
   const [activeTab, setActiveTab] = useState('dashboard') // 'dashboard' | 'historial'
   const [expandedSections, setExpandedSections] = useState({
     basicas: true, pliegues: true, perimetros: false, diametros: false, clasificacion: false
@@ -250,14 +252,21 @@ export default function Antropometria() {
     setModal(true)
   }
 
-  const handleDelete = async (id) => {
-    if (!confirm('¿Eliminar este registro antropométrico?')) return
+  const handleDelete = (id) => {
+    setDeleteModal({ isOpen: true, id, loading: false })
+  }
+
+  const handleConfirmDelete = async () => {
+    if (!deleteModal.id) return
+    setDeleteModal(prev => ({ ...prev, loading: true }))
     try {
-      await api.delete(`/antropometria/${id}`)
-      toast.success('Registro eliminado')
+      await api.delete(`/antropometria/${deleteModal.id}`)
+      toast.success('Registro antropométrico eliminado')
+      setDeleteModal({ isOpen: false, id: null, loading: false })
       loadRegistros(selectedJugador)
     } catch (e) {
-      toast.error(e.message)
+      toast.error(e.response?.data?.error || e.message)
+      setDeleteModal(prev => ({ ...prev, loading: false }))
     }
   }
 
@@ -810,6 +819,19 @@ export default function Antropometria() {
           </div>
         </Modal>
       )}
+
+      {/* Modal de confirmación para eliminar evaluación */}
+      <ConfirmModal
+        isOpen={deleteModal.isOpen}
+        title="¿Eliminar registro antropométrico?"
+        message="¿Estás seguro de que deseas eliminar esta evaluación física y antropométrica? Esta acción no se puede deshacer."
+        confirmText="Sí, Eliminar"
+        cancelText="Cancelar"
+        confirmVariant="danger"
+        loading={deleteModal.loading}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteModal({ isOpen: false, id: null, loading: false })}
+      />
     </div>
   )
 }

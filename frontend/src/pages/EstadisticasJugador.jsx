@@ -5,6 +5,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts'
 import Modal from '../components/Modal'
+import ConfirmModal from '../components/ConfirmModal'
 import LoadingSpinner from '../components/LoadingSpinner'
 import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
@@ -25,6 +26,7 @@ export default function EstadisticasJugador() {
   const [form, setForm]           = useState(EMPTY)
   const [editId, setEditId]       = useState(null)
   const [saving, setSaving]       = useState(false)
+  const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null, loading: false })
 
   const load = async () => {
     setLoading(true)
@@ -85,10 +87,22 @@ export default function EstadisticasJugador() {
     finally { setSaving(false) }
   }
 
-  const handleDelete = async (id) => {
-    if (!confirm('¿Eliminar esta estadística?')) return
-    try { await api.delete(`/estadisticas/${id}`); toast.success('Eliminada'); load() }
-    catch (e) { toast.error(e.message) }
+  const handleDelete = (id) => {
+    setDeleteModal({ isOpen: true, id, loading: false })
+  }
+
+  const handleConfirmDelete = async () => {
+    if (!deleteModal.id) return
+    setDeleteModal(prev => ({ ...prev, loading: true }))
+    try {
+      await api.delete(`/estadisticas/${deleteModal.id}`)
+      toast.success('Estadística eliminada')
+      setDeleteModal({ isOpen: false, id: null, loading: false })
+      load()
+    } catch (e) {
+      toast.error(e.response?.data?.error || e.message)
+      setDeleteModal(prev => ({ ...prev, loading: false }))
+    }
   }
 
   // Agrupar para gráfica
@@ -236,6 +250,19 @@ export default function EstadisticasJugador() {
           </div>
         </Modal>
       )}
+
+      {/* Modal de confirmación para eliminar estadística */}
+      <ConfirmModal
+        isOpen={deleteModal.isOpen}
+        title="¿Eliminar estadística?"
+        message="¿Estás seguro de que deseas eliminar este registro estadístico? Esta acción no se puede deshacer."
+        confirmText="Sí, Eliminar"
+        cancelText="Cancelar"
+        confirmVariant="danger"
+        loading={deleteModal.loading}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteModal({ isOpen: false, id: null, loading: false })}
+      />
     </div>
   )
 }

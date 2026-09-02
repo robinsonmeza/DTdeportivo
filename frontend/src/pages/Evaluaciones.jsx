@@ -5,6 +5,7 @@ import {
   Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Tooltip as RechartsTooltip
 } from 'recharts'
 import Modal from '../components/Modal'
+import ConfirmModal from '../components/ConfirmModal'
 import LoadingSpinner from '../components/LoadingSpinner'
 import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
@@ -34,6 +35,7 @@ export default function Evaluaciones() {
   const [modal, setModal] = useState(false)
   const [form, setForm] = useState(EMPTY)
   const [saving, setSaving] = useState(false)
+  const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null, loading: false })
 
   const load = async () => {
     setLoading(true)
@@ -92,10 +94,22 @@ export default function Evaluaciones() {
     finally { setSaving(false) }
   }
 
-  const handleDelete = async (id) => {
-    if (!confirm('¿Eliminar evaluación?')) return
-    try { await api.delete(`/evaluaciones/${id}`); toast.success('Eliminada'); load() }
-    catch (e) { toast.error(e.message) }
+  const handleDelete = (id) => {
+    setDeleteModal({ isOpen: true, id, loading: false })
+  }
+
+  const handleConfirmDelete = async () => {
+    if (!deleteModal.id) return
+    setDeleteModal(prev => ({ ...prev, loading: true }))
+    try {
+      await api.delete(`/evaluaciones/${deleteModal.id}`)
+      toast.success('Evaluación eliminada')
+      setDeleteModal({ isOpen: false, id: null, loading: false })
+      load()
+    } catch (e) {
+      toast.error(e.response?.data?.error || e.message)
+      setDeleteModal(prev => ({ ...prev, loading: false }))
+    }
   }
 
   return (
@@ -198,6 +212,19 @@ export default function Evaluaciones() {
           </div>
         </Modal>
       )}
+
+      {/* Modal de confirmación para eliminar evaluación */}
+      <ConfirmModal
+        isOpen={deleteModal.isOpen}
+        title="¿Eliminar evaluación?"
+        message="¿Estás seguro de que deseas eliminar esta evaluación física? Esta acción es irreversible."
+        confirmText="Sí, Eliminar"
+        cancelText="Cancelar"
+        confirmVariant="danger"
+        loading={deleteModal.loading}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteModal({ isOpen: false, id: null, loading: false })}
+      />
     </div>
   )
 }

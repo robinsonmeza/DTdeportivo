@@ -1,9 +1,8 @@
 /**
- * Adapter Firestore para DTdeportivo
+ * Adapter Firestore Universal para DTdeportivo
  * Emula la interfaz de db.query() y db.connect() de Node Postgres,
  * traduciendo operaciones SQL a Firestore de Google Cloud.
- * Esto permite persistencia 100% serverless y cloud en Firebase/Firestore
- * sin requerir servidores PostgreSQL externos propensos a desconexión.
+ * Persistencia serverless robusta, tipado seguro y soporte completo CRUD.
  */
 
 const { getFirebaseFirestore } = require('./firebase');
@@ -12,13 +11,27 @@ const {
   query, where, orderBy, limit, writeBatch, runTransaction
 } = require('firebase/firestore');
 
-// Helper to sanitize undefined values for Firestore
+// Helper para limpiar valores undefined para Firestore
 function sanitizeData(obj) {
   const clean = {};
   for (const [key, value] of Object.entries(obj)) {
     clean[key] = value === undefined ? null : value;
   }
   return clean;
+}
+
+// Convertidor seguro a número entero
+function toInt(val, fallback = null) {
+  if (val === null || val === undefined || val === '') return fallback;
+  const parsed = parseInt(val, 10);
+  return isNaN(parsed) ? fallback : parsed;
+}
+
+// Convertidor seguro a número flotante
+function toFloat(val, fallback = null) {
+  if (val === null || val === undefined || val === '') return fallback;
+  const parsed = parseFloat(val);
+  return isNaN(parsed) ? fallback : parsed;
 }
 
 // Generador de IDs secuenciales por colección en Firestore
@@ -37,7 +50,7 @@ async function getNextId(db, collectionName) {
     });
     return res;
   } catch (e) {
-    // Fallback con max ID
+    // Fallback calculando el id máximo existente
     const snap = await getDocs(collection(db, collectionName));
     let maxId = 0;
     snap.forEach(d => {
@@ -169,6 +182,15 @@ async function ensureInitialized(db) {
 }
 
 /**
+ * Normaliza nombres de colecciones en Firestore
+ */
+function normalizeCollectionName(name) {
+  const n = (name || '').toLowerCase().trim();
+  if (n === 'evaluaciones') return 'evaluaciones_rugby';
+  return n;
+}
+
+/**
  * Motor SQL -> Firestore
  */
 async function executeFirestoreQuery(text, params = []) {
@@ -178,41 +200,254 @@ async function executeFirestoreQuery(text, params = []) {
   const cleanText = text.replace(/\s+/g, ' ').trim();
   const lowerText = cleanText.toLowerCase();
 
-  // Helper para leer colección completa en memoria para JOINs y agregaciones
+  // Helper para leer colección completa en memoria
   async function getAllDocs(colName) {
-    const snap = await getDocs(collection(db, colName));
+    const snap = await getDocs(collection(db, normalizeCollectionName(colName)));
     const list = [];
     snap.forEach(d => {
       const data = d.data();
-      list.push({ ...data, id: data.id !== undefined ? data.id : (isNaN(d.id) ? d.id : parseInt(d.id, 10)) });
+      const rawId = data.id !== undefined ? data.id : d.id;
+      const numId = parseInt(rawId, 10);
+      list.push({ ...data, id: isNaN(numId) ? rawId : numId });
     });
     return list;
   }
 
-  // --- DDL IGNORED ---
-  if (lowerText.startsWith('create table') || lowerText.startsWith('alter table') || lowerText.startsWith('do $$') || lowerText.startsWith('grant')) {
+  // --- DDL Y TRANSACCIONES ---
+  if (
+    lowerText.startsWith('create table') || 
+    lowerText.startsWith('alter table') || 
+    lowerText.startsWith('do $$') || 
+    lowerText.startsWith('grant') ||
+    lowerText === 'begin' ||
+    lowerText === 'commit' ||
+    lowerText === 'rollback'
+  ) {
     return { rows: [], rowCount: 0 };
   }
 
-  // --- 1. SELECT USUARIOS (Login & Auth) ---
+  // ==========================================
+  // --- 1. GENERIC INSERT HANDLER ---
+  // ==========================================
+  const insertMatch = cleanText.match(/insert\s+into\s+([a-zA-Z0-9_]+)\s*\(([^)]+)\)\s*values/i);
+  if (insertMatch) {
+    const tableName = normalizeCollectionName(insertMatch[1]);
+    const columns = insertMatch[2].split(',').map(c => c.trim().toLowerCase());
+    const id = await getNextId(db, tableName);
+    
+    const newDoc = { id, created_at: new Date().toISOString() };
+    for (let i = 0; i < columns.length; i++) {
+      const col = columns[i];
+      let val = params[i] !== undefined ? params[i] : null;
+      
+      // Normalización de tipos numéricos comunes
+      if (['jugador_id', 'equipo_id', 'disciplina_id', 'partido_id', 'entrenamiento_id', 'edad'].includes(col)) {
+        val = toInt(val, null);
+      } else if (['peso', 'altura', 'estatura', 'imc', 'porcentaje_grasa', 'masa_muscular_esqueletica', 'masa_mineral_osea', 'sumatoria_pliegues', 'endomorfia', 'mesomorfia', 'ectomorfia', 'x_somatocarta', 'y_somatocarta', 'goles', 'asistencias', 'minutos_jugados', 'sprint_30m', 'salto_vertical', 'resistencia_yoyo', 'score_velocidad', 'score_potencia', 'score_resistencia', 'score_grasa', 'score_musculo', 'score_general'].includes(col) || col.startsWith('pliegue_') || col.startsWith('perimetro_') || col.startsWith('diametro_')) {
+        val = toFloat(val, null);
+      } else if (col === 'asistencia') {
+        val = Boolean(val);
+      }
+      
+      newDoc[col] = val;
+    }
+
+    await setDoc(doc(db, tableName, String(id)), sanitizeData(newDoc));
+    return { rows: [{ id, ...newDoc }], rowCount: 1 };
+  }
+
+  // ==========================================
+  // --- 2. GENERIC UPDATE HANDLER ---
+  // ==========================================
+  if (lowerText.startsWith('update ')) {
+    // Casos especiales de usuarios
+    if (lowerText.includes('update usuarios')) {
+      if (lowerText.includes('password_hash=$1') || lowerText.includes('password_hash = $1')) {
+        const hash = params[0];
+        const salt = params[1];
+        const targetId = toInt(params[2]);
+        const userRef = doc(db, 'usuarios', String(targetId));
+        await updateDoc(userRef, { password_hash: hash, salt, primer_login: true });
+        return { rows: [], rowCount: 1 };
+      }
+      if (lowerText.includes('activo=false') || lowerText.includes('activo = false')) {
+        const targetId = toInt(params[0]);
+        const userRef = doc(db, 'usuarios', String(targetId));
+        await updateDoc(userRef, { activo: false });
+        return { rows: [], rowCount: 1 };
+      }
+    }
+
+    // Caso especial de desvincular jugadores de un equipo
+    if (lowerText.includes('set equipo_id = null where equipo_id = $1') || lowerText.includes('set equipo_id=null where equipo_id=$1')) {
+      const targetId = toInt(params[0]);
+      const allPlayers = await getAllDocs('jugadores');
+      for (const p of allPlayers) {
+        if (toInt(p.equipo_id) === targetId) {
+          await updateDoc(doc(db, 'jugadores', String(p.id)), { equipo_id: null });
+        }
+      }
+      return { rows: [], rowCount: 1 };
+    }
+
+    // Actualizaciones directas por ID
+    const updateTableMatch = cleanText.match(/update\s+([a-zA-Z0-9_]+)\s+set\s+(.+)\s+where\s+(.+)/i);
+    if (updateTableMatch) {
+      const tableName = normalizeCollectionName(updateTableMatch[1]);
+      const setClause = updateTableMatch[2];
+      const whereClause = updateTableMatch[3].toLowerCase();
+
+      // Buscar si el WHERE filtra por ID
+      if (whereClause.includes('id = $') || whereClause.includes('id=$')) {
+        const targetId = toInt(params[params.length - 1]);
+        if (targetId) {
+          const assignments = setClause.split(',').map(s => s.trim());
+          const updateData = {};
+          
+          assignments.forEach(assign => {
+            const parts = assign.split('=').map(p => p.trim());
+            if (parts.length === 2) {
+              const colName = parts[0].toLowerCase();
+              const paramIndexMatch = parts[1].match(/\$(\d+)/);
+              if (paramIndexMatch) {
+                const paramIdx = parseInt(paramIndexMatch[1], 10) - 1;
+                let val = params[paramIdx] !== undefined ? params[paramIdx] : null;
+                
+                // Normalización de tipos
+                if (['jugador_id', 'equipo_id', 'disciplina_id', 'partido_id', 'entrenamiento_id', 'edad'].includes(colName)) {
+                  val = toInt(val, null);
+                } else if (['peso', 'altura', 'estatura', 'imc', 'porcentaje_grasa', 'masa_muscular_esqueletica', 'masa_mineral_osea', 'sumatoria_pliegues', 'endomorfia', 'mesomorfia', 'ectomorfia', 'x_somatocarta', 'y_somatocarta', 'goles', 'asistencias', 'minutos_jugados'].includes(colName) || colName.startsWith('pliegue_') || colName.startsWith('perimetro_') || colName.startsWith('diametro_')) {
+                  val = toFloat(val, null);
+                } else if (colName === 'asistencia' || colName === 'activo') {
+                  val = Boolean(val);
+                }
+
+                // Evitar sobrescribir con null si la query era COALESCE($X, col)
+                if (parts[1].toLowerCase().includes('coalesce') && (val === null || val === undefined)) {
+                  // do nothing
+                } else {
+                  updateData[colName] = val;
+                }
+              }
+            }
+          });
+
+          const docRef = doc(db, tableName, String(targetId));
+          await updateDoc(docRef, sanitizeData(updateData));
+          return { rows: [], rowCount: 1 };
+        }
+      }
+    }
+
+    return { rows: [], rowCount: 1 };
+  }
+
+  // ==========================================
+  // --- 3. GENERIC DELETE HANDLER ---
+  // ==========================================
+  if (lowerText.startsWith('delete from')) {
+    const deleteMatch = cleanText.match(/delete\s+from\s+([a-zA-Z0-9_]+)\s+where\s+(.+)/i);
+    if (deleteMatch) {
+      const tableName = normalizeCollectionName(deleteMatch[1]);
+      const whereClause = deleteMatch[2].toLowerCase();
+
+      // Borrado por ID: DELETE FROM <table> WHERE id = $1
+      if (whereClause.includes('id = $1') || whereClause.includes('id=$1')) {
+        const targetId = toInt(params[0]);
+        if (targetId) {
+          await deleteDoc(doc(db, tableName, String(targetId)));
+
+          // Cascadas lógicas para integridad referencial
+          if (tableName === 'jugadores') {
+            // Borrar antropometría, evaluaciones, asistencias, lesiones, estadísticas del jugador
+            const childTables = ['antropometria', 'evaluaciones_rugby', 'asistencia_entrenamiento', 'estadisticas_jugador', 'lesiones'];
+            for (const ct of childTables) {
+              const childDocs = await getAllDocs(ct);
+              for (const cd of childDocs) {
+                if (toInt(cd.jugador_id) === targetId) {
+                  await deleteDoc(doc(db, ct, String(cd.id)));
+                }
+              }
+            }
+            // Desvincular usuario si estaba asignado a este jugador
+            const users = await getAllDocs('usuarios');
+            for (const u of users) {
+              if (toInt(u.jugador_id) === targetId) {
+                await updateDoc(doc(db, 'usuarios', String(u.id)), { jugador_id: null });
+              }
+            }
+          }
+
+          if (tableName === 'equipos') {
+            // Desvincular jugadores asignados al equipo
+            const players = await getAllDocs('jugadores');
+            for (const p of players) {
+              if (toInt(p.equipo_id) === targetId) {
+                await updateDoc(doc(db, 'jugadores', String(p.id)), { equipo_id: null });
+              }
+            }
+          }
+
+          if (tableName === 'entrenamientos') {
+            // Borrar asistencias del entrenamiento
+            const asistencias = await getAllDocs('asistencia_entrenamiento');
+            for (const a of asistencias) {
+              if (toInt(a.entrenamiento_id) === targetId) {
+                await deleteDoc(doc(db, 'asistencia_entrenamiento', String(a.id)));
+              }
+            }
+          }
+
+          if (tableName === 'partidos') {
+            // Borrar estadísticas del partido
+            const stats = await getAllDocs('estadisticas_jugador');
+            for (const s of stats) {
+              if (toInt(s.partido_id) === targetId) {
+                await deleteDoc(doc(db, 'estadisticas_jugador', String(s.id)));
+              }
+            }
+          }
+
+          return { rows: [], rowCount: 1 };
+        }
+      }
+
+      // Borrado por clave foránea (ej. WHERE entrenamiento_id = $1)
+      if (whereClause.includes('entrenamiento_id = $1') || whereClause.includes('entrenamiento_id=$1')) {
+        const targetId = toInt(params[0]);
+        const list = await getAllDocs(tableName);
+        for (const item of list) {
+          if (toInt(item.entrenamiento_id) === targetId) {
+            await deleteDoc(doc(db, tableName, String(item.id)));
+          }
+        }
+        return { rows: [], rowCount: 1 };
+      }
+    }
+
+    return { rows: [], rowCount: 1 };
+  }
+
+  // ==========================================
+  // --- 4. SELECT / READ QUERIES ---
+  // ==========================================
+
+  // --- 4.1 USUARIOS ---
   if (lowerText.includes('from usuarios')) {
     const allUsers = await getAllDocs('usuarios');
 
-    // Filter by ID
     if (lowerText.includes('where id = $1') || lowerText.includes('where id=$1')) {
-      const targetId = parseInt(params[0], 10);
-      const rows = allUsers.filter(u => u.id === targetId);
+      const targetId = toInt(params[0]);
+      const rows = allUsers.filter(u => toInt(u.id) === targetId);
       return { rows, rowCount: rows.length };
     }
 
-    // Filter by Email exact
     if (lowerText.includes('where email = $1') || lowerText.includes('where lower(email) = $1')) {
       const email = String(params[0]).toLowerCase().trim();
       const rows = allUsers.filter(u => u.email && u.email.toLowerCase().trim() === email);
       return { rows, rowCount: rows.length };
     }
 
-    // Multi-criteria login search
     if (lowerText.includes('lower(email) = $1') || lowerText.includes('regexp_replace')) {
       const term1 = params[0] ? String(params[0]).toLowerCase().trim() : '';
       const term2 = params[1] ? String(params[1]).toLowerCase().trim() : '';
@@ -236,70 +471,11 @@ async function executeFirestoreQuery(text, params = []) {
       return { rows, rowCount: rows.length };
     }
 
-    // List all
     allUsers.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
     return { rows: allUsers, rowCount: allUsers.length };
   }
 
-  // --- 2. INSERT USUARIOS ---
-  if (lowerText.startsWith('insert into usuarios')) {
-    const id = await getNextId(db, 'usuarios');
-    // ($1,$2,$3,$4,$5,...)
-    const nombre = params[0];
-    const email = params[1];
-    const password_hash = params[2];
-    const salt = params[3];
-    const rol = params[4];
-    const jugador_id = params[5] ? parseInt(params[5], 10) : null;
-
-    const newObj = {
-      id,
-      nombre,
-      email: email ? email.toLowerCase().trim() : '',
-      password_hash,
-      salt,
-      rol,
-      jugador_id,
-      activo: true,
-      primer_login: true,
-      created_at: new Date().toISOString()
-    };
-    await setDoc(doc(db, 'usuarios', String(id)), sanitizeData(newObj));
-    return { rows: [{ id }], rowCount: 1 };
-  }
-
-  // --- 3. UPDATE USUARIOS ---
-  if (lowerText.startsWith('update usuarios')) {
-    const allUsers = await getAllDocs('usuarios');
-    if (lowerText.includes('password_hash=$1')) {
-      const hash = params[0];
-      const salt = params[1];
-      const targetId = parseInt(params[2], 10);
-      const userRef = doc(db, 'usuarios', String(targetId));
-      await updateDoc(userRef, { password_hash: hash, salt, primer_login: true });
-      return { rows: [], rowCount: 1 };
-    }
-    if (lowerText.includes('activo=false')) {
-      const targetId = parseInt(params[0], 10);
-      const userRef = doc(db, 'usuarios', String(targetId));
-      await updateDoc(userRef, { activo: false });
-      return { rows: [], rowCount: 1 };
-    }
-    if (lowerText.includes('set nombre=$1, email=$2, rol=$3')) {
-      const nombre = params[0];
-      const email = params[1];
-      const rol = params[2];
-      const jugador_id = params[3] ? parseInt(params[3], 10) : null;
-      const activo = params[4] ?? true;
-      const targetId = parseInt(params[5], 10);
-      const userRef = doc(db, 'usuarios', String(targetId));
-      await updateDoc(userRef, sanitizeData({ nombre, email, rol, jugador_id, activo }));
-      return { rows: [], rowCount: 1 };
-    }
-    return { rows: [], rowCount: 1 };
-  }
-
-  // --- 4. DISCIPLINAS ---
+  // --- 4.2 DISCIPLINAS ---
   if (lowerText.includes('from disciplinas')) {
     const list = await getAllDocs('disciplinas');
     if (lowerText.includes('where lower(nombre) = lower($1)')) {
@@ -311,26 +487,15 @@ async function executeFirestoreQuery(text, params = []) {
     return { rows: list, rowCount: list.length };
   }
 
-  if (lowerText.startsWith('insert into disciplinas')) {
-    const id = await getNextId(db, 'disciplinas');
-    const nombre = params[0];
-    await setDoc(doc(db, 'disciplinas', String(id)), {
-      id,
-      nombre,
-      created_at: new Date().toISOString()
-    });
-    return { rows: [{ id }], rowCount: 1 };
-  }
-
-  // --- 5. EQUIPOS ---
+  // --- 4.3 EQUIPOS ---
   if (lowerText.includes('from equipos')) {
     const equipos = await getAllDocs('equipos');
     const disciplinas = await getAllDocs('disciplinas');
     const jugadores = await getAllDocs('jugadores');
 
     const mapped = equipos.map(e => {
-      const disc = disciplinas.find(d => d.id === e.disciplina_id);
-      const totalJug = jugadores.filter(j => j.equipo_id === e.id).length;
+      const disc = disciplinas.find(d => toInt(d.id) === toInt(e.disciplina_id));
+      const totalJug = jugadores.filter(j => toInt(j.equipo_id) === toInt(e.id)).length;
       return {
         ...e,
         disciplina_nombre: disc ? disc.nombre : null,
@@ -338,9 +503,9 @@ async function executeFirestoreQuery(text, params = []) {
       };
     });
 
-    if (lowerText.includes('where e.id = $1') || lowerText.includes('where id = $1')) {
-      const targetId = parseInt(params[0], 10);
-      const rows = mapped.filter(e => e.id === targetId);
+    if (lowerText.includes('where e.id = $1') || lowerText.includes('where id = $1') || lowerText.includes('where id=$1')) {
+      const targetId = toInt(params[0]);
+      const rows = mapped.filter(e => toInt(e.id) === targetId);
       return { rows, rowCount: rows.length };
     }
     if (lowerText.includes('where lower(nombre) = lower($1)')) {
@@ -348,9 +513,9 @@ async function executeFirestoreQuery(text, params = []) {
       const rows = mapped.filter(e => (e.nombre || '').toLowerCase().trim() === name);
       return { rows, rowCount: rows.length };
     }
-    if (lowerText.includes('where e.disciplina_id = $1')) {
-      const discId = parseInt(params[0], 10);
-      const rows = mapped.filter(e => e.disciplina_id === discId);
+    if (lowerText.includes('where e.disciplina_id = $1') || lowerText.includes('where disciplina_id = $1')) {
+      const discId = toInt(params[0]);
+      const rows = mapped.filter(e => toInt(e.disciplina_id) === discId);
       rows.sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
       return { rows, rowCount: rows.length };
     }
@@ -359,54 +524,15 @@ async function executeFirestoreQuery(text, params = []) {
     return { rows: mapped, rowCount: mapped.length };
   }
 
-  if (lowerText.startsWith('insert into equipos')) {
-    const id = await getNextId(db, 'equipos');
-    const nombre = params[0];
-    const categoria = params[1] || null;
-    const descripcion = params[2] || null;
-    const disciplina_id = params[3] ? parseInt(params[3], 10) : null;
-    const logo_url = params[4] || null;
-
-    const newTeam = { id, nombre, categoria, descripcion, disciplina_id, logo_url, created_at: new Date().toISOString() };
-    await setDoc(doc(db, 'equipos', String(id)), sanitizeData(newTeam));
-    return { rows: [{ id }], rowCount: 1 };
-  }
-
-  if (lowerText.startsWith('update equipos')) {
-    if (lowerText.includes('logo_url = $1 where id = $2')) {
-      const logo_url = params[0];
-      const targetId = parseInt(params[1], 10);
-      await updateDoc(doc(db, 'equipos', String(targetId)), { logo_url });
-      return { rows: [], rowCount: 1 };
-    }
-    const nombre = params[0];
-    const categoria = params[1] || null;
-    const descripcion = params[2] || null;
-    const disciplina_id = params[3] ? parseInt(params[3], 10) : null;
-    const logo_url = params[4] || null;
-    const targetId = parseInt(params[5], 10);
-
-    const dataToUpdate = { nombre, categoria, descripcion, disciplina_id };
-    if (logo_url) dataToUpdate.logo_url = logo_url;
-    await updateDoc(doc(db, 'equipos', String(targetId)), sanitizeData(dataToUpdate));
-    return { rows: [], rowCount: 1 };
-  }
-
-  if (lowerText.startsWith('delete from equipos')) {
-    const targetId = parseInt(params[0], 10);
-    await deleteDoc(doc(db, 'equipos', String(targetId)));
-    return { rows: [], rowCount: 1 };
-  }
-
-  // --- 6. JUGADORES ---
+  // --- 4.4 JUGADORES ---
   if (lowerText.includes('from jugadores')) {
     const jugadores = await getAllDocs('jugadores');
     const equipos = await getAllDocs('equipos');
     const disciplinas = await getAllDocs('disciplinas');
 
     const mapped = jugadores.map(j => {
-      const eq = equipos.find(e => e.id === j.equipo_id);
-      const disc = disciplinas.find(d => d.id === j.disciplina_id);
+      const eq = equipos.find(e => toInt(e.id) === toInt(j.equipo_id));
+      const disc = disciplinas.find(d => toInt(d.id) === toInt(j.disciplina_id));
       return {
         ...j,
         equipo_nombre: eq ? eq.nombre : null,
@@ -417,27 +543,27 @@ async function executeFirestoreQuery(text, params = []) {
     if (lowerText.includes('select count(*)')) {
       let filtered = mapped;
       if (params.length > 0 && params[0]) {
-        filtered = mapped.filter(j => j.disciplina_id === parseInt(params[0], 10));
+        filtered = mapped.filter(j => toInt(j.disciplina_id) === toInt(params[0]));
       }
       return { rows: [{ total: filtered.length }], rowCount: 1 };
     }
 
-    if (lowerText.includes('where j.id = $1') || lowerText.includes('where id = $1')) {
-      const targetId = parseInt(params[0], 10);
-      const rows = mapped.filter(j => j.id === targetId);
+    if (lowerText.includes('where j.id = $1') || lowerText.includes('where id = $1') || lowerText.includes('where id=$1')) {
+      const targetId = toInt(params[0]);
+      const rows = mapped.filter(j => toInt(j.id) === targetId);
       return { rows, rowCount: rows.length };
     }
 
     if (lowerText.includes('where j.equipo_id = $1') || lowerText.includes('where equipo_id = $1')) {
-      const targetId = parseInt(params[0], 10);
-      const rows = mapped.filter(j => j.equipo_id === targetId);
+      const targetId = toInt(params[0]);
+      const rows = mapped.filter(j => toInt(j.equipo_id) === targetId);
       rows.sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
       return { rows, rowCount: rows.length };
     }
 
     if (lowerText.includes('where j.disciplina_id = $1') || lowerText.includes('where disciplina_id = $1')) {
-      const discId = parseInt(params[0], 10);
-      const rows = mapped.filter(j => j.disciplina_id === discId);
+      const discId = toInt(params[0]);
+      const rows = mapped.filter(j => toInt(j.disciplina_id) === discId);
       rows.sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
       return { rows, rowCount: rows.length };
     }
@@ -446,71 +572,15 @@ async function executeFirestoreQuery(text, params = []) {
     return { rows: mapped, rowCount: mapped.length };
   }
 
-  if (lowerText.startsWith('insert into jugadores')) {
-    const id = await getNextId(db, 'jugadores');
-    const nombre = params[0];
-    const edad = params[1] ? parseInt(params[1], 10) : null;
-    const posicion = params[2] || null;
-    const peso = params[3] ? parseFloat(params[3]) : null;
-    const altura = params[4] ? parseFloat(params[4]) : null;
-    const equipo_id = params[5] ? parseInt(params[5], 10) : null;
-    const disciplina_id = params[6] ? parseInt(params[6], 10) : null;
-
-    const newJug = {
-      id, nombre, edad, posicion, peso, altura, equipo_id, disciplina_id, foto_url: null,
-      created_at: new Date().toISOString()
-    };
-    await setDoc(doc(db, 'jugadores', String(id)), sanitizeData(newJug));
-    return { rows: [{ id }], rowCount: 1 };
-  }
-
-  if (lowerText.startsWith('update jugadores')) {
-    if (lowerText.includes('foto_url = $1 where id = $2')) {
-      const foto_url = params[0];
-      const targetId = parseInt(params[1], 10);
-      await updateDoc(doc(db, 'jugadores', String(targetId)), { foto_url });
-      return { rows: [], rowCount: 1 };
-    }
-    if (lowerText.includes('set equipo_id = null where equipo_id = $1')) {
-      const targetId = parseInt(params[0], 10);
-      const all = await getAllDocs('jugadores');
-      for (const j of all) {
-        if (j.equipo_id === targetId) {
-          await updateDoc(doc(db, 'jugadores', String(j.id)), { equipo_id: null });
-        }
-      }
-      return { rows: [], rowCount: 1 };
-    }
-    const nombre = params[0];
-    const edad = params[1] ? parseInt(params[1], 10) : null;
-    const posicion = params[2] || null;
-    const peso = params[3] ? parseFloat(params[3]) : null;
-    const altura = params[4] ? parseFloat(params[4]) : null;
-    const equipo_id = params[5] ? parseInt(params[5], 10) : null;
-    const disciplina_id = params[6] ? parseInt(params[6], 10) : null;
-    const targetId = parseInt(params[7], 10);
-
-    await updateDoc(doc(db, 'jugadores', String(targetId)), sanitizeData({
-      nombre, edad, posicion, peso, altura, equipo_id, disciplina_id
-    }));
-    return { rows: [], rowCount: 1 };
-  }
-
-  if (lowerText.startsWith('delete from jugadores')) {
-    const targetId = parseInt(params[0], 10);
-    await deleteDoc(doc(db, 'jugadores', String(targetId)));
-    return { rows: [], rowCount: 1 };
-  }
-
-  // --- 7. ENTRENAMIENTOS ---
+  // --- 4.5 ENTRENAMIENTOS ---
   if (lowerText.includes('from entrenamientos')) {
     const list = await getAllDocs('entrenamientos');
     if (lowerText.includes('select count(*)')) {
       return { rows: [{ total: list.length }], rowCount: 1 };
     }
-    if (lowerText.includes('where id = $1')) {
-      const targetId = parseInt(params[0], 10);
-      const rows = list.filter(e => e.id === targetId);
+    if (lowerText.includes('where id = $1') || lowerText.includes('where id=$1')) {
+      const targetId = toInt(params[0]);
+      const rows = list.filter(e => toInt(e.id) === targetId);
       return { rows, rowCount: rows.length };
     }
     list.sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''));
@@ -520,86 +590,42 @@ async function executeFirestoreQuery(text, params = []) {
     return { rows: list, rowCount: list.length };
   }
 
-  if (lowerText.startsWith('insert into entrenamientos')) {
-    const id = await getNextId(db, 'entrenamientos');
-    const fecha = params[0];
-    const tipo = params[1];
-    const descripcion = params[2] || null;
-    const newTr = { id, fecha, tipo, descripcion, created_at: new Date().toISOString() };
-    await setDoc(doc(db, 'entrenamientos', String(id)), sanitizeData(newTr));
-    return { rows: [{ id, ...newTr }], rowCount: 1 };
-  }
-
-  if (lowerText.startsWith('update entrenamientos')) {
-    const fecha = params[0];
-    const tipo = params[1];
-    const descripcion = params[2] || null;
-    const targetId = parseInt(params[3], 10);
-    await updateDoc(doc(db, 'entrenamientos', String(targetId)), sanitizeData({ fecha, tipo, descripcion }));
-    return { rows: [], rowCount: 1 };
-  }
-
-  if (lowerText.startsWith('delete from entrenamientos')) {
-    const targetId = parseInt(params[0], 10);
-    await deleteDoc(doc(db, 'entrenamientos', String(targetId)));
-    return { rows: [], rowCount: 1 };
-  }
-
-  // --- 8. ASISTENCIA ---
+  // --- 4.6 ASISTENCIA ---
   if (lowerText.includes('from asistencia_entrenamiento')) {
     const asistencias = await getAllDocs('asistencia_entrenamiento');
     const jugadores = await getAllDocs('jugadores');
+    const entrenamientos = await getAllDocs('entrenamientos');
 
     const mapped = asistencias.map(a => {
-      const jug = jugadores.find(j => j.id === a.jugador_id);
+      const jug = jugadores.find(j => toInt(j.id) === toInt(a.jugador_id));
+      const ent = entrenamientos.find(e => toInt(e.id) === toInt(a.entrenamiento_id));
       return {
         ...a,
         jugador_nombre: jug ? jug.nombre : null,
         posicion: jug ? jug.posicion : null,
-        foto_url: jug ? jug.foto_url : null
+        foto_url: jug ? jug.foto_url : null,
+        entrenamiento_tipo: ent ? ent.tipo : null,
+        fecha: ent ? ent.fecha : null
       };
     });
 
-    if (lowerText.includes('where entrenamiento_id = $1') || lowerText.includes('where a.entrenamiento_id = $1')) {
-      const targetId = parseInt(params[0], 10);
-      const rows = mapped.filter(a => a.entrenamiento_id === targetId);
+    if (lowerText.includes('where ae.entrenamiento_id = $1') || lowerText.includes('where entrenamiento_id = $1') || lowerText.includes('where a.entrenamiento_id = $1')) {
+      const targetId = toInt(params[0]);
+      const rows = mapped.filter(a => toInt(a.entrenamiento_id) === targetId);
       return { rows, rowCount: rows.length };
     }
     return { rows: mapped, rowCount: mapped.length };
   }
 
-  if (lowerText.startsWith('insert into asistencia_entrenamiento')) {
-    const id = await getNextId(db, 'asistencia_entrenamiento');
-    const jugador_id = parseInt(params[0], 10);
-    const entrenamiento_id = parseInt(params[1], 10);
-    const asistencia = Boolean(params[2]);
-    const estado = params[3] || 'presente';
-
-    const newObj = { id, jugador_id, entrenamiento_id, asistencia, estado, created_at: new Date().toISOString() };
-    await setDoc(doc(db, 'asistencia_entrenamiento', String(id)), sanitizeData(newObj));
-    return { rows: [{ id }], rowCount: 1 };
-  }
-
-  if (lowerText.startsWith('delete from asistencia_entrenamiento where entrenamiento_id = $1')) {
-    const targetId = parseInt(params[0], 10);
-    const list = await getAllDocs('asistencia_entrenamiento');
-    for (const a of list) {
-      if (a.entrenamiento_id === targetId) {
-        await deleteDoc(doc(db, 'asistencia_entrenamiento', String(a.id)));
-      }
-    }
-    return { rows: [], rowCount: 1 };
-  }
-
-  // --- 9. PARTIDOS ---
+  // --- 4.7 PARTIDOS ---
   if (lowerText.includes('from partidos')) {
     const list = await getAllDocs('partidos');
     if (lowerText.includes('select count(*)')) {
       return { rows: [{ total: list.length }], rowCount: 1 };
     }
-    if (lowerText.includes('where id = $1')) {
-      const targetId = parseInt(params[0], 10);
-      const rows = list.filter(p => p.id === targetId);
+    if (lowerText.includes('where id = $1') || lowerText.includes('where id=$1')) {
+      const targetId = toInt(params[0]);
+      const rows = list.filter(p => toInt(p.id) === targetId);
       return { rows, rowCount: rows.length };
     }
     if (lowerText.includes('where fecha >=')) {
@@ -612,34 +638,7 @@ async function executeFirestoreQuery(text, params = []) {
     return { rows: list, rowCount: list.length };
   }
 
-  if (lowerText.startsWith('insert into partidos')) {
-    const id = await getNextId(db, 'partidos');
-    const fecha = params[0];
-    const rival = params[1];
-    const tipo = params[2];
-    const resultado = params[3] || null;
-    const newP = { id, fecha, rival, tipo, resultado, created_at: new Date().toISOString() };
-    await setDoc(doc(db, 'partidos', String(id)), sanitizeData(newP));
-    return { rows: [{ id, ...newP }], rowCount: 1 };
-  }
-
-  if (lowerText.startsWith('update partidos')) {
-    const fecha = params[0];
-    const rival = params[1];
-    const tipo = params[2];
-    const resultado = params[3] || null;
-    const targetId = parseInt(params[4], 10);
-    await updateDoc(doc(db, 'partidos', String(targetId)), sanitizeData({ fecha, rival, tipo, resultado }));
-    return { rows: [], rowCount: 1 };
-  }
-
-  if (lowerText.startsWith('delete from partidos')) {
-    const targetId = parseInt(params[0], 10);
-    await deleteDoc(doc(db, 'partidos', String(targetId)));
-    return { rows: [], rowCount: 1 };
-  }
-
-  // --- 10. ESTADISTICAS JUGADOR ---
+  // --- 4.8 ESTADISTICAS JUGADOR ---
   if (lowerText.includes('from estadisticas_jugador')) {
     const stats = await getAllDocs('estadisticas_jugador');
     const jugadores = await getAllDocs('jugadores');
@@ -647,22 +646,25 @@ async function executeFirestoreQuery(text, params = []) {
     const disciplinas = await getAllDocs('disciplinas');
 
     const mapped = stats.map(s => {
-      const j = jugadores.find(jug => jug.id === s.jugador_id);
-      const p = partidos.find(part => part.id === s.partido_id);
-      const d = j ? disciplinas.find(disc => disc.id === j.disciplina_id) : null;
+      const j = jugadores.find(jug => toInt(jug.id) === toInt(s.jugador_id));
+      const p = partidos.find(part => toInt(part.id) === toInt(s.partido_id));
+      const d = j ? disciplinas.find(disc => toInt(disc.id) === toInt(j.disciplina_id)) : null;
       return {
         ...s,
+        jugador_nombre: j ? j.nombre : null,
         nombre: j ? j.nombre : null,
         disciplina_id: j ? j.disciplina_id : null,
         disciplina_nombre: d ? d.nombre : null,
         rival: p ? p.rival : null,
+        partido_fecha: p ? p.fecha : null,
+        partido_tipo: p ? p.tipo : null,
         fecha: p ? p.fecha : null
       };
     });
 
-    if (lowerText.includes('where jugador_id = $1') || lowerText.includes('where es.jugador_id = $1')) {
-      const targetId = parseInt(params[0], 10);
-      const rows = mapped.filter(s => s.jugador_id === targetId);
+    if (lowerText.includes('where es.jugador_id = $1') || lowerText.includes('where jugador_id = $1')) {
+      const targetId = toInt(params[0]);
+      const rows = mapped.filter(s => toInt(s.jugador_id) === targetId);
       return { rows, rowCount: rows.length };
     }
 
@@ -685,7 +687,7 @@ async function executeFirestoreQuery(text, params = []) {
       });
       let rows = Object.values(grouped);
       if (params.length > 0 && params[0]) {
-        rows = rows.filter(r => r.disciplina_id === parseInt(params[0], 10));
+        rows = rows.filter(r => toInt(r.disciplina_id) === toInt(params[0]));
       }
       rows.sort((a, b) => b.total_anotaciones - a.total_anotaciones || b.total_asistencias - a.total_asistencias);
       return { rows: rows.slice(0, 5), rowCount: Math.min(5, rows.length) };
@@ -694,26 +696,13 @@ async function executeFirestoreQuery(text, params = []) {
     return { rows: mapped, rowCount: mapped.length };
   }
 
-  if (lowerText.startsWith('insert into estadisticas_jugador')) {
-    const id = await getNextId(db, 'estadisticas_jugador');
-    const jugador_id = parseInt(params[0], 10);
-    const partido_id = parseInt(params[1], 10);
-    const goles = parseInt(params[2] || 0, 10);
-    const asistencias = parseInt(params[3] || 0, 10);
-    const minutos_jugados = parseInt(params[4] || 0, 10);
-
-    const newObj = { id, jugador_id, partido_id, goles, asistencias, minutos_jugados, created_at: new Date().toISOString() };
-    await setDoc(doc(db, 'estadisticas_jugador', String(id)), sanitizeData(newObj));
-    return { rows: [{ id, ...newObj }], rowCount: 1 };
-  }
-
-  // --- 11. LESIONES ---
+  // --- 4.9 LESIONES ---
   if (lowerText.includes('from lesiones')) {
     const lesiones = await getAllDocs('lesiones');
     const jugadores = await getAllDocs('jugadores');
 
     const mapped = lesiones.map(l => {
-      const j = jugadores.find(jug => jug.id === l.jugador_id);
+      const j = jugadores.find(jug => toInt(jug.id) === toInt(l.jugador_id));
       return {
         ...l,
         jugador_nombre: j ? j.nombre : null,
@@ -724,14 +713,14 @@ async function executeFirestoreQuery(text, params = []) {
     if (lowerText.includes('select count(l.id)') || lowerText.includes('select count(*)')) {
       let active = mapped.filter(l => !l.fecha_fin);
       if (params.length > 0 && params[0]) {
-        active = active.filter(l => l.disciplina_id === parseInt(params[0], 10));
+        active = active.filter(l => toInt(l.disciplina_id) === toInt(params[0]));
       }
       return { rows: [{ total: active.length }], rowCount: 1 };
     }
 
     if (lowerText.includes('where l.jugador_id = $1') || lowerText.includes('where jugador_id = $1')) {
-      const targetId = parseInt(params[0], 10);
-      const rows = mapped.filter(l => l.jugador_id === targetId);
+      const targetId = toInt(params[0]);
+      const rows = mapped.filter(l => toInt(l.jugador_id) === targetId);
       return { rows, rowCount: rows.length };
     }
 
@@ -739,73 +728,18 @@ async function executeFirestoreQuery(text, params = []) {
     return { rows: mapped, rowCount: mapped.length };
   }
 
-  if (lowerText.startsWith('insert into lesiones')) {
-    const id = await getNextId(db, 'lesiones');
-    const jugador_id = parseInt(params[0], 10);
-    const tipo = params[1];
-    const descripcion = params[2] || null;
-    const fecha_inicio = params[3];
-    const fecha_fin = params[4] || null;
-
-    const newL = { id, jugador_id, tipo, descripcion, fecha_inicio, fecha_fin, created_at: new Date().toISOString() };
-    await setDoc(doc(db, 'lesiones', String(id)), sanitizeData(newL));
-    return { rows: [{ id, ...newL }], rowCount: 1 };
-  }
-
-  if (lowerText.startsWith('update lesiones')) {
-    const tipo = params[0];
-    const descripcion = params[1] || null;
-    const fecha_inicio = params[2];
-    const fecha_fin = params[3] || null;
-    const targetId = parseInt(params[4], 10);
-    await updateDoc(doc(db, 'lesiones', String(targetId)), sanitizeData({ tipo, descripcion, fecha_inicio, fecha_fin }));
-    return { rows: [], rowCount: 1 };
-  }
-
-  if (lowerText.startsWith('delete from lesiones')) {
-    const targetId = parseInt(params[0], 10);
-    await deleteDoc(doc(db, 'lesiones', String(targetId)));
-    return { rows: [], rowCount: 1 };
-  }
-
-  // --- 12. EVALUACIONES FÍSICAS & RUGBY ---
+  // --- 4.10 EVALUACIONES FÍSICAS & RUGBY ---
   if (lowerText.includes('from evaluaciones_rugby') || lowerText.includes('from evaluaciones')) {
-    const col = lowerText.includes('evaluaciones_rugby') ? 'evaluaciones_rugby' : 'evaluaciones';
-    const list = await getAllDocs(col);
-    if (lowerText.includes('where jugador_id = $1')) {
-      const targetId = parseInt(params[0], 10);
-      const rows = list.filter(e => e.jugador_id === targetId);
-      rows.sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''));
-      if (lowerText.includes('limit 1')) return { rows: rows.slice(0, 1), rowCount: Math.min(1, rows.length) };
-      return { rows, rowCount: rows.length };
-    }
-    list.sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''));
-    return { rows: list, rowCount: list.length };
-  }
-
-  if (lowerText.startsWith('insert into evaluaciones_rugby') || lowerText.startsWith('insert into evaluaciones')) {
-    const col = lowerText.includes('evaluaciones_rugby') ? 'evaluaciones_rugby' : 'evaluaciones';
-    const id = await getNextId(db, col);
-    const jugador_id = parseInt(params[0], 10);
-    const fecha = params[1];
-    const newDoc = { id, jugador_id, fecha, created_at: new Date().toISOString() };
-    await setDoc(doc(db, col, String(id)), sanitizeData(newDoc));
-    return { rows: [{ id }], rowCount: 1 };
-  }
-
-  // --- 13. ANTROPOMETRIA ---
-  if (lowerText.includes('from antropometria')) {
-    const list = await getAllDocs('antropometria');
+    const list = await getAllDocs('evaluaciones_rugby');
     const jugadores = await getAllDocs('jugadores');
-
-    const mapped = list.map(a => {
-      const j = jugadores.find(jug => jug.id === a.jugador_id);
-      return { ...a, jugador_nombre: j ? j.nombre : null };
+    const mapped = list.map(e => {
+      const j = jugadores.find(jug => toInt(jug.id) === toInt(e.jugador_id));
+      return { ...e, jugador_nombre: j ? j.nombre : null };
     });
 
-    if (lowerText.includes('where jugador_id = $1') || lowerText.includes('where a.jugador_id = $1')) {
-      const targetId = parseInt(params[0], 10);
-      const rows = mapped.filter(a => a.jugador_id === targetId);
+    if (lowerText.includes('where e.jugador_id = $1') || lowerText.includes('where jugador_id = $1')) {
+      const targetId = toInt(params[0]);
+      const rows = mapped.filter(e => toInt(e.jugador_id) === targetId);
       rows.sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''));
       if (lowerText.includes('limit 1')) return { rows: rows.slice(0, 1), rowCount: Math.min(1, rows.length) };
       return { rows, rowCount: rows.length };
@@ -814,27 +748,28 @@ async function executeFirestoreQuery(text, params = []) {
     return { rows: mapped, rowCount: mapped.length };
   }
 
-  if (lowerText.startsWith('insert into antropometria')) {
-    const id = await getNextId(db, 'antropometria');
-    // Save all fields dynamically
-    const fields = [
-      'jugador_id', 'fecha', 'peso', 'estatura', 'imc',
-      'pliegue_biceps', 'pliegue_triceps', 'pliegue_subescapular', 'pliegue_suprailiaco', 'pliegue_supraespinal', 'pliegue_abdominal', 'pliegue_muslo_anterior', 'pliegue_pierna_medial',
-      'perimetro_brazo_relajado', 'perimetro_brazo_contraido', 'perimetro_muslo_medio', 'perimetro_pierna',
-      'diametro_humero', 'diametro_muneca', 'diametro_femur',
-      'porcentaje_grasa', 'masa_muscular_esqueletica', 'masa_mineral_osea', 'sumatoria_pliegues',
-      'posicion_rugby', 'categoria', 'grupo',
-      'endomorfia', 'mesomorfia', 'ectomorfia', 'x_somatocarta', 'y_somatocarta'
-    ];
-    const newAntro = { id, created_at: new Date().toISOString() };
-    for (let i = 0; i < params.length && i < fields.length; i++) {
-      newAntro[fields[i]] = params[i];
+  // --- 4.11 ANTROPOMETRIA ---
+  if (lowerText.includes('from antropometria')) {
+    const list = await getAllDocs('antropometria');
+    const jugadores = await getAllDocs('jugadores');
+
+    const mapped = list.map(a => {
+      const j = jugadores.find(jug => toInt(jug.id) === toInt(a.jugador_id));
+      return { ...a, jugador_nombre: j ? j.nombre : null };
+    });
+
+    if (lowerText.includes('where jugador_id = $1') || lowerText.includes('where a.jugador_id = $1')) {
+      const targetId = toInt(params[0]);
+      const rows = mapped.filter(a => toInt(a.jugador_id) === targetId);
+      rows.sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''));
+      if (lowerText.includes('limit 1')) return { rows: rows.slice(0, 1), rowCount: Math.min(1, rows.length) };
+      return { rows, rowCount: rows.length };
     }
-    await setDoc(doc(db, 'antropometria', String(id)), sanitizeData(newAntro));
-    return { rows: [{ id, ...newAntro }], rowCount: 1 };
+    mapped.sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''));
+    return { rows: mapped, rowCount: mapped.length };
   }
 
-  // Default fallback for any unhandled queries
+  // Fallback por defecto para consultas no interceptadas
   return { rows: [], rowCount: 0 };
 }
 

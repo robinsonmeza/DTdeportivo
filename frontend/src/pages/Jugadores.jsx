@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { Plus, Pencil, Trash2, Users, Eye, Camera, Activity, Target, Upload, Trophy, Sparkles, Filter, ChevronRight } from 'lucide-react'
 import toast from 'react-hot-toast'
 import Modal from '../components/Modal'
+import ConfirmModal from '../components/ConfirmModal'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ImportCsvModal from '../components/ImportCsvModal'
 import api from '../services/api'
@@ -51,6 +52,7 @@ export default function Jugadores() {
   const [modalCsv, setModalCsv]           = useState(false)
   const [modalNuevoDeporte, setModalNuevoDeporte] = useState(false)
   const [selectedPlayer, setSelectedPlayer] = useState(null)
+  const [deleteModal, setDeleteModal]     = useState({ isOpen: false, id: null, nombre: '', loading: false })
   
   // Formulario de jugador
   const [form, setForm]                   = useState(EMPTY)
@@ -210,14 +212,21 @@ export default function Jugadores() {
     }
   }
 
-  const handleDelete = async (id, nombre) => {
-    if (!confirm(`¿Eliminar al deportista ${nombre}?`)) return
+  const handleDelete = (id, nombre) => {
+    setDeleteModal({ isOpen: true, id, nombre, loading: false })
+  }
+
+  const handleConfirmDelete = async () => {
+    if (!deleteModal.id) return
+    setDeleteModal(prev => ({ ...prev, loading: true }))
     try {
-      await api.delete(`/jugadores/${id}`)
-      toast.success('Deportista eliminado')
+      await api.delete(`/jugadores/${deleteModal.id}`)
+      toast.success(`Deportista ${deleteModal.nombre || ''} eliminado correctamente`)
+      setDeleteModal({ isOpen: false, id: null, nombre: '', loading: false })
       loadData()
     } catch (e) {
-      toast.error(e.message)
+      toast.error(e.response?.data?.error || e.message)
+      setDeleteModal(prev => ({ ...prev, loading: false }))
     }
   }
 
@@ -756,6 +765,19 @@ export default function Jugadores() {
           </div>
         </Modal>
       )}
+
+      {/* Modal de confirmación para eliminar deportista */}
+      <ConfirmModal
+        isOpen={deleteModal.isOpen}
+        title="¿Eliminar deportista?"
+        message={`¿Estás seguro de que deseas eliminar permanentemente a "${deleteModal.nombre}"? Sus evaluaciones, asistencias y datos asociados también se eliminarán.`}
+        confirmText="Sí, Eliminar"
+        cancelText="Cancelar"
+        confirmVariant="danger"
+        loading={deleteModal.loading}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteModal({ isOpen: false, id: null, nombre: '', loading: false })}
+      />
     </div>
   )
 }
