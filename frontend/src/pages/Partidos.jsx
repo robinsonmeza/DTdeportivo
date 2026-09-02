@@ -4,16 +4,21 @@ import toast from 'react-hot-toast'
 import Modal from '../components/Modal'
 import LoadingSpinner from '../components/LoadingSpinner'
 import api from '../services/api'
+import { useAuth } from '../context/AuthContext'
 
 const EMPTY = { fecha: '', rival: '', tipo: 'liga', resultado: '' }
 
 export default function Partidos() {
+  const { tienePermiso } = useAuth()
+  const puedeEditar = tienePermiso(['administrador', 'entrenador'])
+
   const [partidos, setPartidos] = useState([])
   const [loading, setLoading]   = useState(true)
   const [modal, setModal]       = useState(false)
   const [form, setForm]         = useState(EMPTY)
   const [editId, setEditId]     = useState(null)
   const [saving, setSaving]     = useState(false)
+
 
   const load = () => {
     setLoading(true)
@@ -75,9 +80,11 @@ export default function Partidos() {
           <Trophy size={15} style={{ display: 'inline', marginRight: 6 }} />
           {partidos.length} partidos · {partidos.filter(p => p.tipo === 'liga').length} de liga
         </span>
-        <button className="btn btn-primary" onClick={openCreate}>
-          <Plus size={16} /> Registrar Partido
-        </button>
+        {puedeEditar && (
+          <button className="btn btn-primary" onClick={openCreate}>
+            <Plus size={16} /> Registrar Partido
+          </button>
+        )}
       </div>
 
       <div className="card" style={{ padding: 0 }}>
@@ -90,7 +97,13 @@ export default function Partidos() {
           <div className="table-wrapper">
             <table>
               <thead>
-                <tr><th>Fecha</th><th>Rival</th><th>Tipo</th><th>Resultado</th><th>Acciones</th></tr>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Rival</th>
+                  <th>Tipo</th>
+                  <th>Resultado</th>
+                  {puedeEditar && <th>Acciones</th>}
+                </tr>
               </thead>
               <tbody>
                 {partidos.map(p => (
@@ -103,16 +116,18 @@ export default function Partidos() {
                     <td style={{ fontWeight: 700, fontSize: 16, color: resultadoColor(p.resultado) }}>
                       {p.resultado || <span style={{ color: 'var(--text-muted)', fontSize: 12, fontWeight: 400 }}>Pendiente</span>}
                     </td>
-                    <td>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <button className="btn btn-ghost btn-sm" onClick={() => openEdit(p)}>
-                          <Pencil size={13} /> Editar
-                        </button>
-                        <button className="btn btn-danger btn-sm" onClick={() => handleDelete(p.id)}>
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    </td>
+                    {puedeEditar && (
+                      <td>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button className="btn btn-ghost btn-sm" onClick={() => openEdit(p)}>
+                            <Pencil size={13} /> Editar
+                          </button>
+                          <button className="btn btn-danger btn-sm" onClick={() => handleDelete(p.id)}>
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

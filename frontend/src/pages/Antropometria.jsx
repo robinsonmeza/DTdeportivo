@@ -14,6 +14,7 @@ import Somatocarta from '../components/Somatocarta'
 import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import { useDeporte } from '../context/DeporteContext'
+import { formatImageUrl } from '../utils/image'
 
 const EMPTY_ANTRO = {
   jugador_id: '',
@@ -294,7 +295,12 @@ export default function Antropometria() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, flex: 1, minWidth: 280 }}>
             <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'var(--surface-hover)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>
               {jugadorActivo?.foto_url ? (
-                <img src={jugadorActivo.foto_url} alt="" style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover' }} />
+                <img
+                  src={formatImageUrl(jugadorActivo.foto_url)}
+                  alt=""
+                  referrerPolicy="no-referrer"
+                  style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover' }}
+                />
               ) : '👤'}
             </div>
             <div style={{ flex: 1 }}>

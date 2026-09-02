@@ -30,8 +30,7 @@ exports.uploadPhoto = async (req, res) => {
   const { id } = req.params;
   if (!req.file) return res.status(400).json({ error: 'No se recibió archivo' });
   try {
-    const baseUrl  = `${req.protocol}://${req.get('host')}`;
-    const foto_url = `${baseUrl}/uploads/players/${req.file.filename}`;
+    const foto_url = `/uploads/players/${req.file.filename}`;
     await db.query('UPDATE jugadores SET foto_url = $1 WHERE id = $2', [foto_url, id]);
     res.json({ foto_url });
   } catch (err) {

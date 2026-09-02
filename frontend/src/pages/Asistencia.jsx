@@ -5,6 +5,7 @@ import LoadingSpinner from '../components/LoadingSpinner'
 import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import { useDeporte } from '../context/DeporteContext'
+import { formatImageUrl } from '../utils/image'
 
 export default function Asistencia() {
   const { tienePermiso } = useAuth()
@@ -270,8 +271,9 @@ export default function Asistencia() {
                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                               {j.foto_url ? (
                                 <img
-                                  src={j.foto_url}
+                                  src={formatImageUrl(j.foto_url)}
                                   alt={j.nombre}
+                                  referrerPolicy="no-referrer"
                                   style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover' }}
                                 />
                               ) : (

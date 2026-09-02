@@ -7,12 +7,16 @@ import {
 import Modal from '../components/Modal'
 import LoadingSpinner from '../components/LoadingSpinner'
 import api from '../services/api'
+import { useAuth } from '../context/AuthContext'
 import { useDeporte } from '../context/DeporteContext'
 
 const EMPTY = { jugador_id: '', partido_id: '', goles: 0, asistencias: 0, minutos_jugados: 0 }
 
 export default function EstadisticasJugador() {
+  const { tienePermiso } = useAuth()
+  const puedeEditar = tienePermiso(['administrador', 'entrenador'])
   const { selectedSportId, selectedSport } = useDeporte()
+
   const [stats, setStats]         = useState([])
   const [jugadores, setJugadores] = useState([])
   const [partidos, setPartidos]   = useState([])
@@ -129,9 +133,11 @@ export default function EstadisticasJugador() {
         <span style={{ color: 'var(--text-muted)', fontSize: 14 }}>
           {statsFiltradas.length} registros estadísticos
         </span>
-        <button className="btn btn-primary" onClick={openCreate}>
-          <Plus size={16} /> Agregar Estadística
-        </button>
+        {puedeEditar && (
+          <button className="btn btn-primary" onClick={openCreate}>
+            <Plus size={16} /> Agregar Estadística
+          </button>
+        )}
       </div>
 
       <div className="card" style={{ padding: 0 }}>
@@ -146,7 +152,8 @@ export default function EstadisticasJugador() {
               <thead>
                 <tr>
                   <th>Jugador</th><th>Partido</th><th>Rival</th>
-                  <th>⚽ Goles / Puntos</th><th>🎯 Asistencias</th><th>⏱ Minutos</th><th>Acciones</th>
+                  <th>⚽ Goles / Puntos</th><th>🎯 Asistencias</th><th>⏱ Minutos</th>
+                  {puedeEditar && <th>Acciones</th>}
                 </tr>
               </thead>
               <tbody>
@@ -162,16 +169,18 @@ export default function EstadisticasJugador() {
                       {s.asistencias}
                     </td>
                     <td>{s.minutos_jugados}</td>
-                    <td>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <button className="btn btn-ghost btn-sm" onClick={() => openEdit(s)}>
-                          <Pencil size={13} /> Editar
-                        </button>
-                        <button className="btn btn-danger btn-sm" onClick={() => handleDelete(s.id)}>
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    </td>
+                    {puedeEditar && (
+                      <td>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button className="btn btn-ghost btn-sm" onClick={() => openEdit(s)}>
+                            <Pencil size={13} /> Editar
+                          </button>
+                          <button className="btn btn-danger btn-sm" onClick={() => handleDelete(s.id)}>
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

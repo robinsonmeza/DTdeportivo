@@ -7,6 +7,7 @@ import {
 import Modal from '../components/Modal'
 import LoadingSpinner from '../components/LoadingSpinner'
 import api from '../services/api'
+import { useAuth } from '../context/AuthContext'
 import { useDeporte } from '../context/DeporteContext'
 
 const EMPTY = {
@@ -23,7 +24,10 @@ const EMPTY = {
 }
 
 export default function Evaluaciones() {
+  const { tienePermiso } = useAuth()
+  const puedeEditar = tienePermiso(['administrador', 'entrenador', 'personal_salud'])
   const { selectedSportId, selectedSport } = useDeporte()
+
   const [evals, setEvals] = useState([])
   const [jugadores, setJugadores] = useState([])
   const [loading, setLoading] = useState(true)
@@ -106,9 +110,11 @@ export default function Evaluaciones() {
 
       <div className="page-toolbar">
         <span style={{ color: 'var(--text-muted)', fontSize: 14 }}>{evalsFiltradas.length} evaluaciones registradas</span>
-        <button className="btn btn-primary" onClick={() => { setForm(EMPTY); setModal(true) }}>
-          <Plus size={16} /> Nueva Evaluación
-        </button>
+        {puedeEditar && (
+          <button className="btn btn-primary" onClick={() => { setForm(EMPTY); setModal(true) }}>
+            <Plus size={16} /> Nueva Evaluación
+          </button>
+        )}
       </div>
 
       <div className="dashboard-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(450px, 1fr))' }}>
@@ -153,9 +159,11 @@ export default function Evaluaciones() {
               </div>
             </div>
 
-            <button className="btn btn-danger btn-sm" style={{ alignSelf: 'flex-end' }} onClick={() => handleDelete(ev.id)}>
-              <Trash2 size={13} /> Eliminar
-            </button>
+            {puedeEditar && (
+              <button className="btn btn-danger btn-sm" style={{ alignSelf: 'flex-end' }} onClick={() => handleDelete(ev.id)}>
+                <Trash2 size={13} /> Eliminar
+              </button>
+            )}
           </div>
         ))}
       </div>

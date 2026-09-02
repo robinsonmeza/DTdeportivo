@@ -4,13 +4,14 @@ import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import { useDeporte } from '../context/DeporteContext'
 import {
-  LayoutDashboard, Users, Dumbbell, HeartPulse, UserCog,
+  LayoutDashboard, Users, Shield, Dumbbell, HeartPulse, UserCog,
   ClipboardList, Trophy, BarChart3, Activity, CalendarCheck2, LogOut,
   ChevronDown
 } from 'lucide-react'
 
 const TODOS_LOS_ITEMS = [
   { to: '/',               icon: LayoutDashboard, label: 'Dashboard',      roles: ['administrador','entrenador','personal_salud','jugador'] },
+  { to: '/equipos',        icon: Shield,           label: 'Equipos',        roles: ['administrador','entrenador','personal_salud'] },
   { to: '/jugadores',      icon: Users,            label: 'Jugadores',      roles: ['administrador','entrenador','personal_salud','jugador'] },
   { to: '/entrenamientos', icon: Dumbbell,         label: 'Entrenamientos', roles: ['administrador','entrenador','personal_salud','jugador'] },
   { to: '/asistencia',     icon: CalendarCheck2,   label: 'Asistencia',     roles: ['administrador','entrenador','personal_salud','jugador'] },
@@ -21,6 +22,7 @@ const TODOS_LOS_ITEMS = [
   { to: '/antropometria',  icon: Activity,         label: 'Antropometría',  roles: ['administrador','entrenador','personal_salud','jugador'] },
   { to: '/usuarios',       icon: UserCog,          label: 'Usuarios',       roles: ['administrador'] },
 ]
+
 
 const ROL_BADGE = {
   administrador: { label: 'Administrador', color: '#e74c3c' },

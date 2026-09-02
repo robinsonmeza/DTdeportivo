@@ -7,11 +7,13 @@
 -- 1. EQUIPOS
 -- -------------------------------------------------------
 CREATE TABLE IF NOT EXISTS equipos (
-  id          SERIAL PRIMARY KEY,
-  nombre      VARCHAR(100) NOT NULL,
-  categoria   VARCHAR(50),
-  descripcion TEXT,
-  created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  id            SERIAL PRIMARY KEY,
+  nombre        VARCHAR(100) NOT NULL,
+  categoria     VARCHAR(50),
+  descripcion   TEXT,
+  logo_url      TEXT,
+  disciplina_id INT REFERENCES disciplinas(id) ON DELETE SET NULL,
+  created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- -------------------------------------------------------

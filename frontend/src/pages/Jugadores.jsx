@@ -7,6 +7,7 @@ import ImportCsvModal from '../components/ImportCsvModal'
 import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import { useDeporte } from '../context/DeporteContext'
+import { formatImageUrl } from '../utils/image'
 
 const EMPTY = { nombre: '', edad: '', posicion: '', peso: '', altura: '', equipo_id: '', disciplina_id: '' }
 
@@ -426,8 +427,9 @@ export default function Jugadores() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         {j.foto_url ? (
                           <img
-                            src={j.foto_url}
+                            src={formatImageUrl(j.foto_url)}
                             alt={j.nombre}
+                            referrerPolicy="no-referrer"
                             style={{ width: 34, height: 34, borderRadius: '50%', objectFit: 'cover' }}
                           />
                         ) : (
@@ -563,8 +565,9 @@ export default function Jugadores() {
               >
                 {selectedPlayer.foto_url ? (
                   <img
-                    src={selectedPlayer.foto_url}
+                    src={formatImageUrl(selectedPlayer.foto_url)}
                     alt={selectedPlayer.nombre}
+                    referrerPolicy="no-referrer"
                     style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                   />
                 ) : (

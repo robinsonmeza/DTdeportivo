@@ -5,6 +5,7 @@ import ProtectedRoute from './components/ProtectedRoute'
 import Navbar from './components/Navbar'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
+import Equipos from './pages/Equipos'
 import Jugadores from './pages/Jugadores'
 import Entrenamientos from './pages/Entrenamientos'
 import Asistencia from './pages/Asistencia'
@@ -37,11 +38,18 @@ export default function App() {
             </ProtectedRoute>
           } />
 
+          <Route path="/equipos" element={
+            <ProtectedRoute roles={['administrador','entrenador','personal_salud']}>
+              <AppLayout><Equipos /></AppLayout>
+            </ProtectedRoute>
+          } />
+
           <Route path="/jugadores" element={
             <ProtectedRoute>
               <AppLayout><Jugadores /></AppLayout>
             </ProtectedRoute>
           } />
+
 
           <Route path="/entrenamientos" element={
             <ProtectedRoute>

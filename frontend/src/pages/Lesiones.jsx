@@ -4,12 +4,16 @@ import toast from 'react-hot-toast'
 import Modal from '../components/Modal'
 import LoadingSpinner from '../components/LoadingSpinner'
 import api from '../services/api'
+import { useAuth } from '../context/AuthContext'
 import { useDeporte } from '../context/DeporteContext'
 
 const EMPTY = { jugador_id: '', tipo: '', descripcion: '', fecha_inicio: '', fecha_fin: '' }
 
 export default function Lesiones() {
+  const { tienePermiso } = useAuth()
+  const puedeEditar = tienePermiso(['administrador', 'entrenador', 'personal_salud'])
   const { selectedSportId, selectedSport } = useDeporte()
+
   const [lesiones, setLesiones]   = useState([])
   const [jugadores, setJugadores] = useState([])
   const [loading, setLoading]     = useState(true)
@@ -101,9 +105,11 @@ export default function Lesiones() {
             {lesionesFiltradas.length} registros · <span style={{ color: 'var(--danger)' }}>{activas.length} activas</span>
           </span>
         </div>
-        <button className="btn btn-primary" onClick={openCreate}>
-          <Plus size={16} /> Registrar Lesión
-        </button>
+        {puedeEditar && (
+          <button className="btn btn-primary" onClick={openCreate}>
+            <Plus size={16} /> Registrar Lesión
+          </button>
+        )}
       </div>
 
       <div className="card" style={{ padding: 0 }}>
@@ -116,7 +122,10 @@ export default function Lesiones() {
           <div className="table-wrapper">
             <table>
               <thead>
-                <tr><th>Jugador</th><th>Tipo</th><th>Inicio</th><th>Fin</th><th>Estado</th><th>Acciones</th></tr>
+                <tr>
+                  <th>Jugador</th><th>Tipo</th><th>Inicio</th><th>Fin</th><th>Estado</th>
+                  {puedeEditar && <th>Acciones</th>}
+                </tr>
               </thead>
               <tbody>
                 {lesionesFiltradas.map(l => (
@@ -130,16 +139,18 @@ export default function Lesiones() {
                         {l.fecha_fin ? 'Recuperado' : 'Activa'}
                       </span>
                     </td>
-                    <td>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <button className="btn btn-ghost btn-sm" onClick={() => openEdit(l)}>
-                          <Pencil size={13} /> Editar
-                        </button>
-                        <button className="btn btn-danger btn-sm" onClick={() => handleDelete(l.id)}>
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    </td>
+                    {puedeEditar && (
+                      <td>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button className="btn btn-ghost btn-sm" onClick={() => openEdit(l)}>
+                            <Pencil size={13} /> Editar
+                          </button>
+                          <button className="btn btn-danger btn-sm" onClick={() => handleDelete(l.id)}>
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

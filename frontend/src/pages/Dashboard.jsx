@@ -2,8 +2,9 @@ import { useEffect, useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Users, Activity, Trophy, Dumbbell, Goal, Star, Plus, Trash2,
-  ChevronRight, ArrowRight, Sparkles, Filter, ShieldCheck, CheckCircle2
+  ChevronRight, ArrowRight, Sparkles, Filter, ShieldCheck, Shield, CheckCircle2
 } from 'lucide-react'
+
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
@@ -399,6 +400,31 @@ export default function Dashboard() {
               </div>
               <ChevronRight size={16} color="var(--text-muted)" />
             </Link>
+
+            {tienePermiso(['administrador', 'entrenador', 'personal_salud']) && (
+              <Link
+                to="/equipos"
+                className="card"
+                style={{
+                  padding: '14px 18px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  textDecoration: 'none',
+                  color: 'var(--text-primary)',
+                  background: 'var(--surface)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 'var(--radius-md)',
+                  transition: 'var(--transition)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <Shield size={18} color="var(--accent)" />
+                  <span style={{ fontWeight: 600, fontSize: 13 }}>Módulo de Equipos</span>
+                </div>
+                <ChevronRight size={16} color="var(--text-muted)" />
+              </Link>
+            )}
 
             <Link
               to="/asistencia"
