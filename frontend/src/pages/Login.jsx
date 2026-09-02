@@ -36,14 +36,14 @@ export default function Login() {
 
         <form onSubmit={handleSubmit} className="login-form">
           <div className="form-group">
-            <label htmlFor="email">Correo electrónico</label>
+            <label htmlFor="email">Usuario o correo electrónico</label>
             <input
               id="email"
-              type="email"
-              placeholder="usuario@ejemplo.com"
+              type="text"
+              placeholder="Usuario o correo electrónico"
               value={form.email}
               onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-              autoComplete="email"
+              autoComplete="username"
               autoFocus
             />
           </div>
@@ -74,18 +74,6 @@ export default function Login() {
             {cargando ? 'Ingresando...' : 'Ingresar'}
           </button>
         </form>
-
-        <div className="login-credentials">
-          <p>Credenciales de prueba:</p>
-          <table>
-            <tbody>
-              <tr><td>Admin</td><td>admin@dtdeportivo.com</td><td>Admin123!</td></tr>
-              <tr><td>Entrenador</td><td>entrenador@dtdeportivo.com</td><td>Coach123!</td></tr>
-              <tr><td>Salud</td><td>salud@dtdeportivo.com</td><td>Salud123!</td></tr>
-              <tr><td>Jugador</td><td>jugador@dtdeportivo.com</td><td>Jugador123!</td></tr>
-            </tbody>
-          </table>
-        </div>
       </div>
     </div>
   )

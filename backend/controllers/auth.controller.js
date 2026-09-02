@@ -19,12 +19,24 @@ function generarTokens(usuario) {
 // POST /api/auth/login
 exports.login = async (req, res) => {
   const { email, password } = req.body;
-  if (!email || !password) return res.status(400).json({ error: 'Email y contraseña requeridos' });
+  if (!email || !password) return res.status(400).json({ error: 'Usuario / Email y contraseña requeridos' });
 
   try {
+    const rawInput = email.trim();
+    const term = rawInput.toLowerCase();
+    const termClean = term.replace(/[\s_.-]+/g, '');
+    const defaultEmail = term.includes('@') ? term : `${term.replace(/\s+/g, '_')}@dtdeportivo.com`;
+
     const { rows } = await db.query(
-      'SELECT * FROM usuarios WHERE email = $1 AND activo = true',
-      [email.toLowerCase().trim()]
+      `SELECT * FROM usuarios 
+       WHERE (
+         LOWER(email) = $1
+         OR LOWER(email) = $2
+         OR LOWER(nombre) = $1
+         OR REGEXP_REPLACE(LOWER(email), '[\\s_.-]+', '', 'g') = $3
+         OR REGEXP_REPLACE(LOWER(nombre), '[\\s_.-]+', '', 'g') = $3
+       ) AND activo = true`,
+      [term, defaultEmail, termClean]
     );
     if (!rows.length) return res.status(401).json({ error: 'Credenciales inválidas' });
 

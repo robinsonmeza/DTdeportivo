@@ -17,10 +17,11 @@ function hashPassword(password, salt) {
 }
 
 const seedUsers = [
-  { nombre: 'Administrador',  email: 'admin@dtdeportivo.com',      password: 'Admin123!',   rol: 'administrador'  },
-  { nombre: 'Entrenador',     email: 'entrenador@dtdeportivo.com', password: 'Coach123!',   rol: 'entrenador'     },
-  { nombre: 'Personal Salud', email: 'salud@dtdeportivo.com',      password: 'Salud123!',   rol: 'personal_salud' },
-  { nombre: 'Jugador Demo',   email: 'jugador@dtdeportivo.com',    password: 'Jugador123!', rol: 'jugador'        },
+  { nombre: 'Robinson Meza',  email: 'robinson_meza@dtdeportivo.com', password: 'No4lkcqa..',  rol: 'administrador'  },
+  { nombre: 'Cesar DT',       email: 'cesar_dt@dtdeportivo.com',      password: 'Cesar_2026..', rol: 'entrenador'     },
+  { nombre: 'Juan Moreno',    email: 'juan_moreno@dtdeportivo.com',   password: 'Tvsraider01.', rol: 'entrenador'     },
+  { nombre: 'Personal Salud', email: 'salud@dtdeportivo.com',         password: 'Salud123!',   rol: 'personal_salud' },
+  { nombre: 'Jugador Demo',   email: 'jugador@dtdeportivo.com',       password: 'Jugador123!', rol: 'jugador'        },
 ];
 
 async function run() {
