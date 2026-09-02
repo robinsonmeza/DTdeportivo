@@ -1,8 +1,28 @@
-# IMPLEMENTACION.md — Funcionalidades Pendientes DTdeportivo
+# IMPLEMENTACION.md — Hoja de Ruta y Estado de Funcionalidades DTdeportivo
 
-Este archivo describe las funcionalidades pendientes aprobadas para implementar en próximas sesiones.
+Este archivo describe las funcionalidades implementadas recientemente y las tareas pendientes aprobadas para próximas sesiones.
 
 ---
+
+## Funcionalidades Recientemente Implementadas
+
+### ✅ Cálculo Automático de Composición Corporal & ISAK en Antropometría
+- **Motor de cálculo en cliente (`frontend/src/utils/anthropometry.js`)**:
+  - `% Grasa Corporal`: fórmulas de Yuhasz (6 pliegues adaptada para atletas por género) y Faulkner (4 pliegues).
+  - `Masa Muscular Esquelética (kg)`: modelo de fraccionamiento de 4 componentes de Matiegka.
+  - `Masa Mineral Ósea (kg)`: ecuación de Rocha basada en diámetros de húmero y fémur.
+  - `Somatotipo Heath-Carter`: Endomorfia, Mesomorfia, Ectomorfia y coordenadas $(X, Y)$ para la Somatocarta.
+- **Frontend Interactivo**:
+  - Tarjeta de cálculo en vivo en el modal de evaluación.
+  - Modo autocompletar activable / desactivable con botón de recálculo instantáneo.
+- **Backend & Sincronización**:
+  - Cálculo automático en `antropometria.controller.js` con detección automática del género del jugador.
+- **Despliegue Vercel**:
+  - Configuración optimizada en `vercel.json` con preset `vite` y redirecciones SPA / API serverless.
+
+---
+
+## Funcionalidades Pendientes
 
 ## Punto 2 — Rol Head Coach
 

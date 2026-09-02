@@ -65,8 +65,10 @@ DTdeportivo/
 │       ├── services/
 │       │   └── api.js             ← Cliente Axios con interceptor de tokens
 │       └── utils/
+│           ├── anthropometry.js   ← Motor de cálculo ISAK, % grasa, masa muscular y somatotipo
 │           └── image.js           ← Normalizador de URLs de imágenes
 ├── metadata.json                  ← Metadatos del applet
+├── vercel.json                    ← Configuración de despliegue en Vercel (Preset Vite)
 └── IMPLEMENTACION.md              ← Hoja de ruta de funcionalidades futuras
 ```
 
@@ -83,7 +85,10 @@ DTdeportivo/
 7. **Estadísticas de Rendimiento:** Registro de goles, puntos, asistencias y minutos disputados por partido.
 8. **Lesiones y Salud:** Bitácora médica con tipo de lesión, diagnóstico, fecha de inicio y alta médica.
 9. **Evaluaciones Físicas y Rugby:** Tests físicos generales y batería específica de Rugby (velocidad, resistencia, salto, fuerza máxima y agilidad).
-10. **Antropometría ISAK-1:** Cálculo automatizado de composición corporal de 5 componentes, cálculo de somatotipo (Endomorfia, Mesomorfia, Ectomorfia) y renderizado interactivo en la **Somatocarta de Heath-Carter**.
+10. **Antropometría ISAK-1 & Composición Corporal:** 
+    - **Cálculo automático en tiempo real:** Estimación inmediata de `% Grasa` (fórmulas de Yuhasz y Faulkner según género), `Masa Muscular Esquelética (kg)` (modelo 4C de Matiegka), `Masa Ósea (kg)` (fórmula de Rocha) y `Masa Residual`.
+    - **Somatotipo Heath-Carter:** Cálculo automatizado de Endomorfia, Mesomorfia y Ectomorfia con renderizado interactivo en la **Somatocarta bidimensional**.
+    - **Flexibilidad:** Permite modo de auto-completado y sobreescritura manual para mediciones clínicas especializadas (DXA, bioimpedancia).
 11. **Gestión de Usuarios (RBAC):** Creación individual y masiva mediante archivo CSV, asignación de roles y restablecimiento de claves.
 
 ---

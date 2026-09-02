@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
   Plus, Trash2, Pencil, Activity, Ruler, Target, Info, ChevronRight, ChevronDown,
-  Save, Calendar, TrendingUp, Award, User, Flame, Dumbbell, BarChart3, Scale, Layers
+  Save, Calendar, TrendingUp, Award, User, Flame, Dumbbell, BarChart3, Scale, Layers, Zap, Sparkles
 } from 'lucide-react'
 import {
   ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid,
@@ -16,6 +16,7 @@ import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import { useDeporte } from '../context/DeporteContext'
 import { formatImageUrl } from '../utils/image'
+import { calculateAnthropometry } from '../utils/anthropometry'
 
 const EMPTY_ANTRO = {
   jugador_id: '',
@@ -45,8 +46,9 @@ export default function Antropometria() {
   const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null, loading: false })
   const [activeTab, setActiveTab] = useState('dashboard') // 'dashboard' | 'historial'
   const [expandedSections, setExpandedSections] = useState({
-    basicas: true, pliegues: true, perimetros: false, diametros: false, clasificacion: false
+    basicas: true, pliegues: true, perimetros: false, diametros: false, composicion: true, clasificacion: false
   })
+  const [autoCalculate, setAutoCalculate] = useState(true)
   const [filterPos, setFilterPos] = useState('')
   const [filterCat, setFilterCat] = useState('')
   const [showAvg, setShowAvg] = useState(true)
@@ -185,16 +187,41 @@ export default function Antropometria() {
 
   const toggleSection = (s) => setExpandedSections(prev => ({ ...prev, [s]: !prev[s] }))
 
+  const liveCalculation = calculateAnthropometry(form, jugadorActivo?.genero)
+
   const handleChange = (e) => {
     const { name, value } = e.target
     setForm(f => {
       const updated = { ...f, [name]: value }
-      if ((name === 'peso' || name === 'estatura') && updated.peso && updated.estatura) {
-        const imc = (Number(updated.peso) / Math.pow(Number(updated.estatura), 2)).toFixed(2)
-        updated.imc = imc
+      const calc = calculateAnthropometry(updated, jugadorActivo?.genero)
+
+      if (calc.imc !== null) updated.imc = calc.imc
+
+      if (autoCalculate) {
+        if (calc.porcentaje_grasa !== null && name !== 'porcentaje_grasa') {
+          updated.porcentaje_grasa = calc.porcentaje_grasa
+        }
+        if (calc.masa_muscular_esqueletica !== null && name !== 'masa_muscular_esqueletica') {
+          updated.masa_muscular_esqueletica = calc.masa_muscular_esqueletica
+        }
+        if (calc.masa_mineral_osea !== null && name !== 'masa_mineral_osea') {
+          updated.masa_mineral_osea = calc.masa_mineral_osea
+        }
       }
       return updated
     })
+  }
+
+  const handleRecalculateNow = () => {
+    const calc = calculateAnthropometry(form, jugadorActivo?.genero)
+    setForm(f => ({
+      ...f,
+      imc: calc.imc ?? f.imc,
+      porcentaje_grasa: calc.porcentaje_grasa ?? f.porcentaje_grasa,
+      masa_muscular_esqueletica: calc.masa_muscular_esqueletica ?? f.masa_muscular_esqueletica,
+      masa_mineral_osea: calc.masa_mineral_osea ?? f.masa_mineral_osea
+    }))
+    toast.success('Métricas de composición corporal recalculadas automáticamente')
   }
 
   const handleSubmit = async () => {
@@ -206,7 +233,7 @@ export default function Antropometria() {
         toast.success('Registro actualizado exitosamente')
       } else {
         await api.post('/antropometria', { ...form, jugador_id: selectedJugador })
-        toast.success('Evaluación antropométrica guardada')
+        toast.success('Evaluación antropométrica guardada con cálculos automáticos')
       }
       setModal(false)
       setEditId(null)
@@ -734,6 +761,83 @@ export default function Antropometria() {
               <input type="date" name="fecha" value={form.fecha} onChange={handleChange} />
             </div>
 
+            {/* Tarjeta de Resumen en Tiempo Real de Composición Corporal */}
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(59, 130, 246, 0.08))',
+              border: '1px solid rgba(16, 185, 129, 0.3)',
+              borderRadius: 12,
+              padding: '16px',
+              marginBottom: 20
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Sparkles size={18} color="var(--accent)" />
+                  <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>
+                    Cálculo Automático en Tiempo Real (ISAK & Somatotipo)
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={autoCalculate}
+                      onChange={(e) => setAutoCalculate(e.target.checked)}
+                      style={{ cursor: 'pointer' }}
+                    />
+                    Auto-completar campos
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleRecalculateNow}
+                    className="btn btn-ghost"
+                    style={{ fontSize: 11, padding: '4px 8px', height: 'auto', display: 'flex', alignItems: 'center', gap: 4 }}
+                  >
+                    <Zap size={12} /> Recalcular
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10 }}>
+                <div style={{ background: 'var(--surface)', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)' }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>% Grasa</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--warning)' }}>
+                    {liveCalculation.porcentaje_grasa ? `${liveCalculation.porcentaje_grasa}%` : '—'}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                    {liveCalculation.masa_grasa_kg ? `${liveCalculation.masa_grasa_kg} kg` : 'Fórmula ISAK'}
+                  </div>
+                </div>
+
+                <div style={{ background: 'var(--surface)', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)' }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Masa Muscular</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--accent2-light)' }}>
+                    {liveCalculation.masa_muscular_esqueletica ? `${liveCalculation.masa_muscular_esqueletica} kg` : '—'}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                    {liveCalculation.porcentaje_musculo ? `${liveCalculation.porcentaje_musculo}% peso` : 'Modelo Matiegka'}
+                  </div>
+                </div>
+
+                <div style={{ background: 'var(--surface)', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)' }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Masa Ósea</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>
+                    {liveCalculation.masa_mineral_osea ? `${liveCalculation.masa_mineral_osea} kg` : '—'}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Fórmula Rocha</div>
+                </div>
+
+                <div style={{ background: 'var(--surface)', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)' }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Somatotipo</div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--accent-light)' }}>
+                    {liveCalculation.somatotipo_str !== '0.0 - 0.0 - 0.0' ? liveCalculation.somatotipo_str : '—'}
+                  </div>
+                  <div style={{ fontSize: 10, color: 'var(--accent2)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {liveCalculation.clasificacion_somatotipo}
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* A. Medidas Básicas */}
             <SectionHeader id="basicas" icon={Ruler} title="Medidas Básicas" expanded={expandedSections.basicas} />
             {expandedSections.basicas && (
@@ -780,7 +884,56 @@ export default function Antropometria() {
               </div>
             )}
 
-            {/* E. Clasificación & Categoría */}
+            {/* E. Composición Corporal (Cálculo Automático & Ajustes Manuales) */}
+            <SectionHeader id="composicion" icon={Layers} title="Composición Corporal (Automática / Personalizada)" expanded={expandedSections.composicion} />
+            {expandedSections.composicion && (
+              <div className="form-grid" style={{ marginBottom: 20 }}>
+                <div className="form-group">
+                  <label style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>% Grasa Corporal</span>
+                    <span style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 600 }}>Auto / Manual</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    name="porcentaje_grasa"
+                    value={form.porcentaje_grasa}
+                    onChange={handleChange}
+                    placeholder="Ej. 12.5"
+                  />
+                </div>
+                <div className="form-group">
+                  <label style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Masa Muscular Esquelética (kg)</span>
+                    <span style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 600 }}>Auto / Manual</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    name="masa_muscular_esqueletica"
+                    value={form.masa_muscular_esqueletica}
+                    onChange={handleChange}
+                    placeholder="Ej. 36.4"
+                  />
+                </div>
+                <div className="form-group">
+                  <label style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Masa Mineral Ósea (kg)</span>
+                    <span style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 600 }}>Auto / Manual</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    name="masa_mineral_osea"
+                    value={form.masa_mineral_osea}
+                    onChange={handleChange}
+                    placeholder="Ej. 11.2"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* F. Clasificación & Categoría */}
             <SectionHeader id="clasificacion" icon={Info} title="Clasificación y Posición Deportiva" expanded={expandedSections.clasificacion} />
             {expandedSections.clasificacion && (
               <div className="form-grid">
