@@ -3,17 +3,7 @@ const path = require('path');
 const fs   = require('fs');
 const multer = require('multer');
 
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    const dir = path.join(__dirname, '..', 'uploads', 'players');
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    cb(null, dir);
-  },
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `player-${req.params.id || Date.now()}${ext}`);
-  },
-});
+const storage = multer.memoryStorage();
 
 const upload = multer({
   storage,
@@ -30,10 +20,23 @@ exports.uploadPhoto = async (req, res) => {
   const { id } = req.params;
   if (!req.file) return res.status(400).json({ error: 'No se recibió archivo' });
   try {
-    const foto_url = `/uploads/players/${req.file.filename}`;
+    let foto_url;
+    try {
+      const dir = path.join(__dirname, '..', 'uploads', 'players');
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      const ext = path.extname(req.file.originalname).toLowerCase() || '.png';
+      const filename = `player-${id || Date.now()}${ext}`;
+      const filePath = path.join(dir, filename);
+      fs.writeFileSync(filePath, req.file.buffer);
+      foto_url = `/uploads/players/${filename}`;
+    } catch (diskErr) {
+      foto_url = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+    }
+
     await db.query('UPDATE jugadores SET foto_url = $1 WHERE id = $2', [foto_url, id]);
     res.json({ foto_url });
   } catch (err) {
+    console.error('Error al actualizar foto del jugador:', err);
     res.status(500).json({ error: err.message });
   }
 };

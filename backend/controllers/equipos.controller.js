@@ -33,20 +33,8 @@ async function asegurarColumnasEquipos() {
 }
 
 // Configuración de Multer para imágenes de equipos (logos/escudos)
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    const dir = path.join(__dirname, '..', 'uploads', 'teams');
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    cb(null, dir);
-  },
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, `team-${req.params.id || Date.now()}-${Date.now()}${ext}`);
-  },
-});
-
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const allowed = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/svg+xml'];
@@ -61,10 +49,25 @@ exports.uploadLogo = async (req, res) => {
   const { id } = req.params;
   if (!req.file) return res.status(400).json({ error: 'No se recibió ningún archivo de imagen' });
   try {
-    const logo_url = `/uploads/teams/${req.file.filename}`;
+    let logo_url;
+    // Intentar almacenar en disco si el sistema de archivos es de escritura
+    try {
+      const uploadsDir = path.join(__dirname, '..', 'uploads', 'teams');
+      if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+      const ext = path.extname(req.file.originalname).toLowerCase() || '.png';
+      const filename = `team-${id || Date.now()}-${Date.now()}${ext}`;
+      const filePath = path.join(uploadsDir, filename);
+      fs.writeFileSync(filePath, req.file.buffer);
+      logo_url = `/uploads/teams/${filename}`;
+    } catch (diskErr) {
+      // En entornos Serverless/Vercel (sistema de archivos de solo lectura), almacenar como Data URI Base64
+      logo_url = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+    }
+
     await db.query('UPDATE equipos SET logo_url = $1 WHERE id = $2', [logo_url, id]);
     res.json({ logo_url, message: 'Imagen del equipo actualizada correctamente' });
   } catch (err) {
+    console.error('Error al actualizar escudo del equipo:', err);
     res.status(500).json({ error: err.message });
   }
 };

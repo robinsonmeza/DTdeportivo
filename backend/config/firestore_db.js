@@ -333,7 +333,7 @@ async function executeFirestoreQuery(text, params = []) {
           });
 
           const docRef = doc(db, tableName, String(targetId));
-          await updateDoc(docRef, sanitizeData(updateData));
+          await setDoc(docRef, sanitizeData(updateData), { merge: true });
           return { rows: [], rowCount: 1 };
         }
       }

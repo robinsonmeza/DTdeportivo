@@ -147,40 +147,42 @@ export default function Equipos() {
     }
     setSaving(true)
     try {
-      let currentLogoUrl = form.logo_url
-
-      // 1. Guardar o actualizar registro de equipo
       const payload = {
         nombre: form.nombre.trim(),
         categoria: form.categoria ? form.categoria.trim() : null,
         descripcion: form.descripcion ? form.descripcion.trim() : null,
         disciplina_id: form.disciplina_id || null,
-        logo_url: currentLogoUrl || null
+        logo_url: form.logo_url || null
       }
 
       let teamId = editId
       if (editId) {
         await api.put(`/equipos/${editId}`, payload)
-        toast.success('Equipo actualizado exitosamente')
       } else {
         const res = await api.post('/equipos', payload)
         teamId = res.data.id
-        toast.success('Equipo creado exitosamente')
       }
 
       // 2. Si se seleccionó un archivo de imagen, subirlo
       if (selectedFile && teamId) {
         const formData = new FormData()
         formData.append('logo', selectedFile)
-        await api.post(`/equipos/${teamId}/logo`, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        })
+        try {
+          await api.post(`/equipos/${teamId}/logo`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+          })
+        } catch (imgErr) {
+          console.warn('Advertencia al subir escudo:', imgErr)
+          toast.error('El equipo se guardó pero ocurrió un detalle con el escudo: ' + (imgErr.response?.data?.error || imgErr.message))
+        }
       }
 
+      toast.success(editId ? 'Equipo actualizado exitosamente' : 'Equipo creado exitosamente')
       setModalForm(false)
+      setSelectedFile(null)
       cargarEquipos()
     } catch (e) {
-      toast.error(e.message || 'Error al guardar el equipo')
+      toast.error(e.response?.data?.error || e.message || 'Error al guardar el equipo')
     } finally {
       setSaving(false)
     }
